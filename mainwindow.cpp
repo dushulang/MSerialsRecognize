@@ -38,7 +38,11 @@ MainWindow::MainWindow(QWidget *parent) :
 
 
     static auto Min = [=](){showMinimized();};
-    ui->menuBar->addAction(Decode("X"),this,exit);
+    ui->menuBar->addAction(Decode("X"),this,[](){
+        global::GetIns()->isGoingToExit = true;
+        MCamera::GetIns()->CloseCamera();
+        exit(0);
+    });
     ui->menuBar->addAction(Decode("-"),this,Min);
 
     QMenu *file_menu=new QMenu(Decode("帮助"));
@@ -50,37 +54,50 @@ MainWindow::MainWindow(QWidget *parent) :
 
     showFullScreen();
 
+    ISSAVEIMAGE = 0;
+
     #define IH   964
     #define IW  1292
+
+    using namespace HalconCpp;
+    SetHcppInterfaceStringEncodingIsUtf8(false);
+
+    ui->tabWidget->clear();
     int nWndWidth = ui->widgetCam1->width();
     int nWndHeight= ui->widgetCam1->height();    
     HalconCpp::SetCheck("~father");
     HalconCpp::OpenWindow(0, 0, nWndWidth, nWndHeight, (Hlong)ui->widgetCam1->winId(), "visible", "", &global::GetIns()->Cam1Disp);
     HalconCpp::SetCheck("father");
+    ui->tabWidget->insertTab(0,new FormBlackSide(0,TupleEx(0,global::GetIns()->Cam1Disp)),MSerials::Decode("相机1"));
 
     nWndWidth = ui->widgetCam2->width();
     nWndHeight= ui->widgetCam2->height();
     HalconCpp::SetCheck("~father");
     HalconCpp::OpenWindow(0, 0, nWndWidth, nWndHeight, (Hlong)ui->widgetCam2->winId(), "visible", "", &global::GetIns()->Cam2Disp);
     HalconCpp::SetCheck("father");
+    ui->tabWidget->insertTab(1,new FormBlackSide(0,TupleEx(1,global::GetIns()->Cam2Disp)),MSerials::Decode("相机2"));
 
     nWndWidth = ui->widgetCam3->width();
     nWndHeight= ui->widgetCam3->height();
     HalconCpp::SetCheck("~father");
     HalconCpp::OpenWindow(0, 0, nWndWidth, nWndHeight, (Hlong)ui->widgetCam3->winId(), "visible", "", &global::GetIns()->Cam3Disp);
     HalconCpp::SetCheck("father");
+    ui->tabWidget->insertTab(2,new FormRecognize(0,TupleEx(2,global::GetIns()->Cam3Disp)),MSerials::Decode("相机3"));
 
-    ui->tabWidget->clear();
-    ui->tabWidget->insertTab(0,new FormBlackSide(0,TupleEx(0,global::GetIns()->Cam1Disp)),MSerials::Decode("相机1"));
-    ui->tabWidget->insertTab(1,new FormBlackSide(0,TupleEx(0,global::GetIns()->Cam2Disp)),MSerials::Decode("相机2"));
-    ui->tabWidget->insertTab(2,new FormRecognize(0,TupleEx(0,global::GetIns()->Cam3Disp)),MSerials::Decode("相机3"));
+
+
+
+
+
+
+
 
 
     QLCDNumber *液晶时间显示 = ui->lcdNumber;// new QLCDNumber(ui->widget_LCD);
     液晶时间显示->setDigitCount(10);
     液晶时间显示->setMode(QLCDNumber::Dec);
     液晶时间显示->setSegmentStyle(QLCDNumber::Filled);
-    液晶时间显示->setStyleSheet("QLCDNumber{background:rgba(64,30,66);color:white}");
+    液晶时间显示->setStyleSheet("QLCDNumber{background:rgba(230,230,232);color:black}");
 
     QTimer *timer_io = new QTimer();
     //设置定时器每个多少毫秒发送一个timeout()信号
@@ -109,9 +126,12 @@ MainWindow::MainWindow(QWidget *parent) :
     });
     timer_io->start();
 
-    ui->widgetlLabel->setStyleSheet("QWidget{background:rgba(64,30,66);color:white}");
-    ui->label->setStyleSheet("QLabel{background:rgba(64,30,66);color:white;fontsize:64}");
-    ui->label->setText(MSerials::Decode("聚新自动化"));
+    ui->widgetlLabel->setStyleSheet("QWidget{background:rgba(230,230,232);color:black}");
+    ui->widgetlLabel->setStyleSheet("border-image:url(./1.png)");
+
+    //ui->widget->setStyleSheet("QWidget{background:rgba(64,30,66);color:white}");
+    //ui->label->setStyleSheet("QLabel{background:rgba(64,30,66);color:white;font-size:88px}");
+    //ui->label->setText(MSerials::Decode("插片机检测"));
     global::GetIns()->History.push_back("相机命名为1 2...否则打不开相机");
     MCamera::GetIns()->Init();
     Machine::GetIns()->name();

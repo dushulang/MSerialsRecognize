@@ -4,6 +4,7 @@
 #include <windows.h>
 #include "../PLC_DLL/PLC_DLL/plc_dll.h"
 #include "mserialssystem.h"
+#include "opencv.hpp"
 
 //指定在CPU哪个核上运行
 // SetProcessAffinityMask
@@ -24,6 +25,7 @@ private:
 public:
     MEvent EvtCam1,EvtCam2,EvtCam12Deal,EvtCam3,EvtPLC;
 
+
 private:
     Machine();
     ~Machine(){UnregisterWaitEx(NewWait, INVALID_HANDLE_VALUE);timeKillEvent(gtime_ID);}
@@ -36,10 +38,7 @@ public:
     //非大并发情况下，直接在main 里初始化，否则可能产生重复的bug
     static Machine* GetIns(){static Machine l;  return &l;}
 
-
-
-
-
+    void ImageIn1(cv::Mat& ,int);
     const char *name(){return "Machine";}
 
 

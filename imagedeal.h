@@ -6,6 +6,8 @@
 #include <exception>
 #include "preference.h"
 #include "halcontocv.h"
+#include "caffe.h"
+
 
 #define CHOPSTICKNONE   0
 #define CHOPSTICKUP     1
@@ -13,6 +15,24 @@
 #define CHOPSTICKDOWN   3
 #define CHOPSTICKRIGHT  4
 #define TRAINXML        "traindata.xml"
+
+#define UP CHOPSTICKUP
+#define LEFT CHOPSTICKLEFT
+#define DOWN CHOPSTICKDOWN
+#define RIGHT CHOPSTICKRIGHT
+
+//定义检测错误为0 上为1 左为2 下为3 右为4 触发定义地址D300和D301
+//定义检测结果是否有花纹 ，触发定义302
+
+//检测结果方向返回的20个数据，前是个为第一个相机，后10个位第二个相机
+//D310 D311 D312 D313 D314 D315 D316 D317 D318 D319
+
+//D340          .....                          D349
+
+//返回结果是否有花纹正面
+//D360 D361
+
+
 
 using namespace HalconCpp;
 namespace MSerials {
@@ -47,6 +67,86 @@ public:
 
 };
 
+static // Short Description: Creates an arrow shaped XLD contour.
+void gen_arrow_contour_xld (HObject *ho_Arrow, HTuple hv_Row1, HTuple hv_Column1,
+    HTuple hv_Row2, HTuple hv_Column2, HTuple hv_HeadLength, HTuple hv_HeadWidth)
+{
+
+  // Local iconic variables
+  HObject  ho_TempArrow;
+
+  // Local control variables
+  HTuple  hv_Length, hv_ZeroLengthIndices, hv_DR;
+  HTuple  hv_DC, hv_HalfHeadWidth, hv_RowP1, hv_ColP1, hv_RowP2;
+  HTuple  hv_ColP2, hv_Index;
+
+  //This procedure generates arrow shaped XLD contours,
+  //pointing from (Row1, Column1) to (Row2, Column2).
+  //If starting and end point are identical, a contour consisting
+  //of a single point is returned.
+  //
+  //input parameteres:
+  //Row1, Column1: Coordinates of the arrows' starting points
+  //Row2, Column2: Coordinates of the arrows' end points
+  //HeadLength, HeadWidth: Size of the arrow heads in pixels
+  //
+  //output parameter:
+  //Arrow: The resulting XLD contour
+  //
+  //The input tuples Row1, Column1, Row2, and Column2 have to be of
+  //the same length.
+  //HeadLength and HeadWidth either have to be of the same length as
+  //Row1, Column1, Row2, and Column2 or have to be a single element.
+  //If one of the above restrictions is violated, an error will occur.
+  //
+  //
+  //Init
+  GenEmptyObj(&(*ho_Arrow));
+  //
+  //Calculate the arrow length
+  DistancePp(hv_Row1, hv_Column1, hv_Row2, hv_Column2, &hv_Length);
+  //
+  //Mark arrows with identical start and end point
+  //(set Length to -1 to avoid division-by-zero exception)
+  hv_ZeroLengthIndices = hv_Length.TupleFind(0);
+  if (0 != (hv_ZeroLengthIndices!=-1))
+  {
+    hv_Length[hv_ZeroLengthIndices] = -1;
+  }
+  //
+  //Calculate auxiliary variables.
+  hv_DR = (1.0*(hv_Row2-hv_Row1))/hv_Length;
+  hv_DC = (1.0*(hv_Column2-hv_Column1))/hv_Length;
+  hv_HalfHeadWidth = hv_HeadWidth/2.0;
+  //
+  //Calculate end points of the arrow head.
+  hv_RowP1 = (hv_Row1+((hv_Length-hv_HeadLength)*hv_DR))+(hv_HalfHeadWidth*hv_DC);
+  hv_ColP1 = (hv_Column1+((hv_Length-hv_HeadLength)*hv_DC))-(hv_HalfHeadWidth*hv_DR);
+  hv_RowP2 = (hv_Row1+((hv_Length-hv_HeadLength)*hv_DR))-(hv_HalfHeadWidth*hv_DC);
+  hv_ColP2 = (hv_Column1+((hv_Length-hv_HeadLength)*hv_DC))+(hv_HalfHeadWidth*hv_DR);
+  //
+  //Finally create output XLD contour for each input point pair
+  {
+  HTuple end_val45 = (hv_Length.TupleLength())-1;
+  HTuple step_val45 = 1;
+  for (hv_Index=0; hv_Index.Continue(end_val45, step_val45); hv_Index += step_val45)
+  {
+    if (0 != (HTuple(hv_Length[hv_Index])==-1))
+    {
+      //Create_ single points for arrows with identical start and end point
+      GenContourPolygonXld(&ho_TempArrow, HTuple(hv_Row1[hv_Index]), HTuple(hv_Column1[hv_Index]));
+    }
+    else
+    {
+      //Create arrow contour
+      GenContourPolygonXld(&ho_TempArrow, ((((HTuple(hv_Row1[hv_Index]).TupleConcat(HTuple(hv_Row2[hv_Index]))).TupleConcat(HTuple(hv_RowP1[hv_Index]))).TupleConcat(HTuple(hv_Row2[hv_Index]))).TupleConcat(HTuple(hv_RowP2[hv_Index]))).TupleConcat(HTuple(hv_Row2[hv_Index])),
+          ((((HTuple(hv_Column1[hv_Index]).TupleConcat(HTuple(hv_Column2[hv_Index]))).TupleConcat(HTuple(hv_ColP1[hv_Index]))).TupleConcat(HTuple(hv_Column2[hv_Index]))).TupleConcat(HTuple(hv_ColP2[hv_Index]))).TupleConcat(HTuple(hv_Column2[hv_Index])));
+    }
+    ConcatObj((*ho_Arrow), ho_TempArrow, &(*ho_Arrow));
+  }
+  }
+  return;
+}
 
 
 
@@ -80,8 +180,8 @@ static void DrawRetangleMult (HObject *ho_ROI, HTuple hv_Num, HTuple hv_RowIn, H
                               hv_RowTmp = hv_RStart+((hv_i*hv_Len2Div)*(hv_AngleIn.TupleCos()));
                               hv_ColTmp = hv_CStart+((hv_i*hv_Len2Div)*(hv_AngleIn.TupleSin()));
                               GenRectangle2(&ho_ROITmp, hv_RowTmp, hv_ColTmp, hv_AngleIn, hv_Len1In, hv_Len2Div/2);
-                              if (HDevWindowStack::IsOpen())
-                                DispObj(ho_ROITmp, HDevWindowStack::GetActive());
+                            //  if (HDevWindowStack::IsOpen())
+                               // DispObj(ho_ROITmp, HDevWindowStack::GetActive());
                               (*hv_Row)[hv_i] = hv_RowTmp;
                               (*hv_Column)[hv_i] = hv_ColTmp;
                               Union2((*ho_ROI), ho_ROITmp, &(*ho_ROI));
@@ -97,7 +197,7 @@ static void DrawRetangleMult (HObject *ho_ROI, HTuple hv_Num, HTuple hv_RowIn, H
 
 
 
-static void FindTrackLine (HObject ho_MeasureImage, HTuple hv_RowIn, HTuple hv_ColumnIn,
+static void FindTrackLine (HObject ho_MeasureImage, HTuple hv_winHandle, HTuple hv_RowIn, HTuple hv_ColumnIn,
                            HTuple hv_AngleIn, HTuple hv_Len1In, HTuple hv_Len2In, HTuple hv_Num, HTuple hv_ImageWidth,
                            HTuple hv_ImageHeight, HTuple *hv_OrgX, HTuple *hv_OrgY, HTuple *hv_OrgPhi)
                        {
@@ -134,8 +234,8 @@ static void FindTrackLine (HObject ho_MeasureImage, HTuple hv_RowIn, HTuple hv_C
                                  &hv_RowEdgeFirst, &hv_ColumnEdgeFirst, &hv_AmplitudeFirst, &hv_IntraDistance);
                              GenCrossContourXld(&ho_Cross, HTuple(hv_RowEdgeFirst[0]), HTuple(hv_ColumnEdgeFirst[0]),
                                  20, 0.785398);
-                             if (HDevWindowStack::IsOpen())
-                               DispObj(ho_Cross, HDevWindowStack::GetActive());
+                           //  if (HDevWindowStack::IsOpen())
+                               DispObj(ho_Cross, hv_winHandle);
                              hv_RowLine = hv_RowLine.TupleConcat(HTuple(hv_RowEdgeFirst[0]));
                              hv_ColLine = hv_ColLine.TupleConcat(HTuple(hv_ColumnEdgeFirst[0]));
                            }
@@ -155,12 +255,12 @@ static void FindTrackLine (HObject ho_MeasureImage, HTuple hv_RowIn, HTuple hv_C
                          GenContourPolygonXld(&ho_Contour, hv_RowLine, hv_ColLine);
                          FitLineContourXld(ho_Contour, "drop", -1, 0, 5, 1.345, &hv_RowBegin1, &hv_ColBegin1,
                              &hv_RowEnd1, &hv_ColEnd1, &hv_Nr1, &hv_Nc1, &hv_Dist1);
-                         if (HDevWindowStack::IsOpen())
-                           SetColor(HDevWindowStack::GetActive(),"cyan");
-                         if (HDevWindowStack::IsOpen())
-                           DispObj(ho_Contour, HDevWindowStack::GetActive());
-                         if (HDevWindowStack::IsOpen())
-                           SetColor(HDevWindowStack::GetActive(),"red");
+                       //  if (HDevWindowStack::IsOpen())
+                           SetColor(hv_winHandle,"cyan");
+                      //   if (HDevWindowStack::IsOpen())
+                           DispObj(ho_Contour, hv_winHandle);
+                     //    if (HDevWindowStack::IsOpen())
+                           SetColor(hv_winHandle,"red");
                          (*hv_OrgX) = (hv_ColEnd1+hv_ColBegin1)/2;
                          (*hv_OrgY) = (hv_RowEnd1+hv_RowBegin1)/2;
                          AngleLx(hv_RowBegin1, hv_ColBegin1, hv_RowEnd1, hv_ColEnd1, &(*hv_OrgPhi));
@@ -170,16 +270,152 @@ static void FindTrackLine (HObject ho_MeasureImage, HTuple hv_RowIn, HTuple hv_C
                          return;
                        }
 
-static int CheckUpSide(cv::Mat *InputArray,double Threshold = 64){
-    try {
-        CV_Assert(nullptr != InputArray && !InputArray->empty());
+int CheckUpSideOld(cv::Mat &InputArray, HTuple DispHd,double thresholdVar = 46, double minArea = 800, float ratio_rectangle = 0.5,\
+                   int d = 9, double sigmaColor = 20, double sigmaSpace = 5,
+                   double  FixThreshold = 0,
+                   int blocksize = 75,
+                   std::string *result = nullptr,
+                   int direction = UP);
 
-    } catch (std::exception ex) {
+
+
+static int CheckUpSide(cv::Mat *InputArray,HTuple hv_WindowHandle,
+                       double Threshold = 85,
+                       double choparea = 50000,
+                       double mean = 5,
+                       double factor = 0.7,
+                       double ersion = 12,
+                       double bias = -1
+                       ){
+
+     HObject ho_ChopStick, ho_Connections;
+      HObject  ho_MaxConnection, ho_ImageReduced, ho_ImageMeaned;
+      HObject  ho_Region, ho_ThresHolded, ho_Arrow1;
+
+      // Local control variables
+      HTuple  hv_Direction, hv_threshold_var, hv_chopstickArea_min;
+      HTuple  hv_mean_var, hv_Factor, hv_ersion_Radius, hv_threshold_bias;
+      HTuple  hv_ImageFiles, hv_Index, hv_Width, hv_Height;
+      HTuple  hv_Area, hv_Row, hv_Col, hv_UsedThreshold, hv_threshold_var2;
+      HTuple  hv_RowEnd, hv_ColEnd, hv_ArrowLen, hv_LR, hv_LC;
+
+      // dev_update_window(...); only in hdevelop
+
+
+      //方向返回值
+      int Direction = 0;
+      //参数区域
+      //二值化取出筷子
+      hv_threshold_var = Threshold;
+      //检测筷子有无参数
+      hv_chopstickArea_min = choparea;
+      //滤波参数，防止筷子噪点太多，因为halcon没有双边滤波,增加一个增强因子
+      hv_mean_var = mean;
+      //增强银因子
+      hv_Factor = factor;
+      //去掉边缘影响
+      hv_ersion_Radius = ersion;
+      //大津法增加偏移值
+      hv_threshold_bias = bias;
+
+
+    try {
+        HalconCpp::HObject ho_Image;
+        CV_Assert(nullptr != InputArray && !InputArray->empty());
+        MSerials::Mat2Hobj(*InputArray,ho_Image);
+        MSerials::h_disp_obj(ho_Image,hv_WindowHandle);
+        GetImageSize(ho_Image, &hv_Width, &hv_Height);
+
+         HDevWindowStack::Push(hv_WindowHandle);
+         if (HDevWindowStack::IsOpen())
+           DispObj(ho_Image, HDevWindowStack::GetActive());
+         if (HDevWindowStack::IsOpen())
+           SetDraw(HDevWindowStack::GetActive(),"margin");
+         if (HDevWindowStack::IsOpen())
+           SetColor(HDevWindowStack::GetActive(),"cyan");
+
+         HalconCpp::Threshold(ho_Image, &ho_ChopStick, hv_threshold_var, 255);
+         Connection(ho_ChopStick, &ho_Connections);
+         SelectShapeStd(ho_Connections, &ho_MaxConnection, "max_area", 70);
+         FillUp(ho_MaxConnection, &ho_MaxConnection);
+         ErosionCircle(ho_MaxConnection, &ho_MaxConnection, hv_ersion_Radius);
+         Connection(ho_MaxConnection, &ho_Connections);
+         SelectShapeStd(ho_Connections, &ho_MaxConnection, "max_area", 70);
+         AreaCenter(ho_MaxConnection, &hv_Area, &hv_Row, &hv_Col);
+
+         if (0 != (hv_Area<hv_chopstickArea_min))
+         {
+           hv_Direction = 0;
+           SetColor(hv_WindowHandle,"red");
+           SetTposition(hv_WindowHandle, 0, 1);
+           WriteString(hv_WindowHandle, "没有筷子");
+           return 0;
+         }
+
+         if (HDevWindowStack::IsOpen())
+           DispObj(ho_MaxConnection, HDevWindowStack::GetActive());
+         if (HDevWindowStack::IsOpen())
+           SetColor(HDevWindowStack::GetActive(),"green");
+         ReduceDomain(ho_Image, ho_MaxConnection, &ho_ImageReduced);
+         Illuminate(ho_ImageReduced, &ho_ImageReduced, hv_Width, hv_Height, hv_Factor);
+         MeanImage(ho_ImageReduced, &ho_ImageMeaned, hv_mean_var, hv_mean_var);
+         BinaryThreshold(ho_ImageMeaned, &ho_Region, "max_separability", "dark", &hv_UsedThreshold);
+         hv_threshold_var2 = hv_UsedThreshold+hv_threshold_bias;
+         HalconCpp::Threshold(ho_ImageMeaned, &ho_ThresHolded, 0, hv_threshold_var2);
+         AreaCenter(ho_ThresHolded, &hv_Area, &hv_RowEnd, &hv_ColEnd);
+
+
+         //gen_arrow_contour_xld (Arrow, Row, Col, RowEnd, ColEnd, 35, 35)
+         hv_ArrowLen = (hv_Width+hv_Height)/6;
+         hv_LR = (hv_RowEnd-hv_Row).TupleAbs();
+         hv_LC = (hv_ColEnd-hv_Col).TupleAbs();
+         if (0 != (hv_LR>hv_LC))
+         {
+           if (0 != (hv_RowEnd<hv_Row))
+           {
+             hv_RowEnd = hv_Row-hv_ArrowLen;
+             Direction = 1;
+           }
+           else
+           {
+             hv_RowEnd = hv_Row+hv_ArrowLen;
+             Direction = 3;
+           }
+           hv_ColEnd = hv_Col;
+         }
+         else
+         {
+           if (0 != (hv_ColEnd<hv_Col))
+           {
+             hv_ColEnd = hv_Col-hv_ArrowLen;
+             Direction = 2;
+           }
+           else
+           {
+             hv_ColEnd = hv_Col+hv_ArrowLen;
+             Direction = 4;
+           }
+           hv_RowEnd = hv_Row;
+         }
+         gen_arrow_contour_xld(&ho_Arrow1, hv_Row, hv_Col, hv_RowEnd, hv_ColEnd, 35, 35);
+         if (HDevWindowStack::IsOpen())
+           SetDraw(HDevWindowStack::GetActive(),"fill");
+         if (HDevWindowStack::IsOpen())
+           DispObj(ho_ThresHolded, HDevWindowStack::GetActive());
+         if (HDevWindowStack::IsOpen())
+           SetColor(HDevWindowStack::GetActive(),"cyan");
+         if (HDevWindowStack::IsOpen())
+           DispObj(ho_Arrow1, HDevWindowStack::GetActive());
+         return Direction;
+    }catch(HalconCpp::HException ex){
+      throw ex;
+      }
+      catch (std::exception ex) {
         throw ex;
     }catch(cv::Exception ex){
         throw std::exception(ex.what());
     }
-    return CHOPSTICKNONE;
+    return (1+CHOPSTICKNONE);
 }
 
 //svm检测正反
@@ -230,7 +466,8 @@ static float cv_train_inv(std::vector<std::string> front_imgs, std::vector<std::
     size_t PosSamNO = pos_path.size(),NegSamNO = neg_path.size();
     CV_Assert(PosSamNO > 0 && NegSamNO >0);
     try {
-        HOGDescriptor hog(Size(HOGWIDTH, HOGHEIGHT), Size(16, 16), Size(8, 8), Size(8, 8), 9);//HOG检测器，用来计算HOG描述子的
+        //Size(HOGWIDTH,  HOGHEIGHT), Size(BLOCKW , BLOCKH ), Size(CELLW, CELLH ), Size(CELLW, CELLH ), 9);
+        HOGDescriptor hog(Size(HOGWIDTH, HOGHEIGHT), Size(BLOCKW , BLOCKH ), Size(CELLW, CELLH ), Size(CELLW, CELLH ), 9);//HOG检测器，用来计算HOG描述子的
         int DescriptorDim;
         Mat sampleFeatureMat;
         Mat sampleLabelMat;
@@ -239,7 +476,7 @@ static float cv_train_inv(std::vector<std::string> front_imgs, std::vector<std::
             cv::Mat src,srcimg = imread(pos_path[num]);
             resize(srcimg, src, Size(HOGWIDTH, HOGHEIGHT));
             vector<float> descriptors;//HOG描述子向量
-            hog.compute(src, descriptors, Size(8, 8));
+            hog.compute(src, descriptors, Size(CELLW, CELLH ));
             if (0 == num)
             {
                 DescriptorDim = descriptors.size();
@@ -284,6 +521,19 @@ static float cv_train_inv(std::vector<std::string> front_imgs, std::vector<std::
 
 static float HogSvmPredict(const cv::Mat& InputArray)
 {
+
+#ifdef USE_CAFFE
+    try {
+        Caffe caffe;
+        String Res= "null";
+        int Loc = -1;
+        caffe.Predict(InputArray,Res,Loc,32,256);
+        if(0==Loc) return -1.0;
+        else return 1.0;
+    } catch (std::exception & e) {
+        throw e;
+    }
+#endif
     try {
         using namespace cv;
         cv::Mat src;
@@ -299,10 +549,12 @@ static float HogSvmPredict(const cv::Mat& InputArray)
         int DescriptorDim;
         Mat res,img;
         Mat sampleFeatureMat;
+
+
         resize(src, img, Size(HOGWIDTH,  HOGHEIGHT));
-        HOGDescriptor hog(Size(HOGWIDTH,  HOGHEIGHT), Size(16, 16), Size(8, 8), Size(8, 8), 9);
+        HOGDescriptor hog(Size(HOGWIDTH,  HOGHEIGHT), Size(BLOCKW , BLOCKH ), Size(CELLW, CELLH ), Size(CELLW, CELLH ), 9);
         std::vector<float> descriptors;
-        hog.compute(img, descriptors, Size(8, 8));
+        hog.compute(img, descriptors, Size(CELLW, CELLH ));
         DescriptorDim = descriptors.size();
         sampleFeatureMat = Mat::zeros(1, DescriptorDim, CV_32FC1);
         for (int i = 0; i < DescriptorDim; i++)
@@ -320,9 +572,10 @@ static float HogSvmPredict(const cv::Mat& InputArray)
 
 //输入图像，大概定位的ROI，
 //WhichSet  -2表示保存图片， 大于-1 表示要显示效果，用于设定时候
-static std::vector<double> CheckLogo(cv::Mat *InputArray, double Row, double Col, double Angle, double Len1, double Len2, std::vector<double> Bias, double CheckLen1, double CheckLen2,int WhichSet = -1){
+static std::vector<double> CheckLogo(HTuple DispHd,cv::Mat *InputArray, double Row, double Col, double Angle, double Len1, double Len2, std::vector<double> Bias, double CheckLen1, double CheckLen2,double VBias,int WhichSet = -1){
     using namespace HalconCpp;
     std::vector<double> Result;
+    std::vector<cv::Point2d> ResultTmp;
     HObject  ho_Image, ho_ROI_0, ho_ImageReduced;
     HObject  ho_ROI_Check, ho_ImageCheck, ho_UnRotationImageToCheck;
     HObject  ho_ImageToCheck;
@@ -355,10 +608,10 @@ static std::vector<double> CheckLogo(cv::Mat *InputArray, double Row, double Col
          MSerials::Mat2Hobj(*InputArray,ho_Image);
          //参数准备END
          GetImageSize(ho_Image, &hv_Width, &hv_Height);
-         if (HDevWindowStack::IsOpen())
-           SetDraw(HDevWindowStack::GetActive(),"margin");
-         if (HDevWindowStack::IsOpen())
-           SetColor(HDevWindowStack::GetActive(),"cyan");
+         //if (HDevWindowStack::IsOpen())
+           SetDraw(DispHd,"margin");
+         //if (HDevWindowStack::IsOpen())
+           SetColor(DispHd,"cyan");
          //先找到背景来确定大致位置
          if (0 != (hv_Angle<0))
          {
@@ -366,10 +619,10 @@ static std::vector<double> CheckLogo(cv::Mat *InputArray, double Row, double Col
          }
          GenRectangle2(&ho_ROI_0, hv_Row, hv_Column, hv_Angle, hv_Len1, hv_Len2);
          ReduceDomain(ho_Image, ho_ROI_0, &ho_ImageReduced);
-         if (HDevWindowStack::IsOpen())
-           DispObj(ho_ROI_0, HDevWindowStack::GetActive());
+         //if (HDevWindowStack::IsOpen())
+           DispObj(ho_ROI_0, DispHd);
          //根据ROI_0找到定位的基准点
-         FindTrackLine(ho_Image, hv_Row, hv_Column, hv_Angle, hv_Len1, hv_Len2, hv_Num,
+         FindTrackLine(ho_Image,DispHd, hv_Row, hv_Column, hv_Angle, hv_Len1, hv_Len2, hv_Num,
              hv_Width, hv_Height, &hv_ColumnBase, &hv_RowBase, &hv_OrgPhi);
 
          //相对于大致位置生成20个检测框
@@ -378,9 +631,10 @@ static std::vector<double> CheckLogo(cv::Mat *InputArray, double Row, double Col
          HTuple step_val65 = 1;
          for (hv_i=0; hv_i.Continue(end_val65, step_val65); hv_i += step_val65)
          {
+           HTuple hv_HBias = VBias*(hv_Angle.TupleSin()),hv_VBias = VBias*(hv_Angle.TupleCos());
            hv_Distance = HTuple(hv_Bias[hv_i]);
-           hv_RowStart = hv_RowBase-(HTuple(hv_Bias[hv_i])*(hv_Angle.TupleSin()));
-           hv_ColStart = hv_ColumnBase+(HTuple(hv_Bias[hv_i])*(hv_Angle.TupleCos()));
+           hv_RowStart = hv_VBias + hv_RowBase-(HTuple(hv_Bias[hv_i])*(hv_Angle.TupleSin()));
+           hv_ColStart = hv_HBias + hv_ColumnBase+(HTuple(hv_Bias[hv_i])*(hv_Angle.TupleCos()));
            GenRectangle2(&ho_ROI_Check, hv_RowStart, hv_ColStart, hv_Angle, hv_Len1Search,
                hv_Len2Search);
            ReduceDomain(ho_Image, ho_ROI_Check, &ho_ImageCheck);
@@ -395,44 +649,67 @@ static std::vector<double> CheckLogo(cv::Mat *InputArray, double Row, double Col
            float Res = MSerials::HogSvmPredict(ToCheck);
            char res[256] = {0};
            sprintf_s(res,"%2.1f",Res);
-           SetTposition(HDevWindowStack::GetActive(),hv_RowStart,hv_ColStart - CheckLen1);
+           SetTposition(DispHd,hv_RowStart,hv_ColStart - CheckLen1);
            if (Res > 0.0)
            {
-             Result.push_back(1.0);
-             if (HDevWindowStack::IsOpen())
-               SetColor(HDevWindowStack::GetActive(),"green");
+             ResultTmp.push_back(cv::Point2d(hv_ColStart[0].D(),1.0));
+            // Result.push_back(1.0);
+             //if (HDevWindowStack::IsOpen())
+               SetColor(DispHd,"green");
            }
            else
            {
-             Result.push_back(-1.0);
-             if (HDevWindowStack::IsOpen())
-               SetColor(HDevWindowStack::GetActive(),"red");
+               ResultTmp.push_back(cv::Point2d(hv_ColStart[0].D(),-1.0));
+            // Result.push_back(-1.0);
+            // if (HDevWindowStack::IsOpen())
+               SetColor(DispHd,"red");
            }
-            WriteString(HDevWindowStack::GetActive(),res);
+            WriteString(DispHd,res);
            }
            else if(-2 == WhichSet){
+               float Res = 0.0;
+               QString QRes = "Error";
+               try{
+               cv::Mat ToCheck;
+               MSerials::HObject2Mat(ho_ImageToCheck,ToCheck);
+               Res = MSerials::HogSvmPredict(ToCheck);
+               if(Res>0){
+                    QRes = "OK";
+               }else {
+                    QRes = "NG";
+               }
+               } catch (std::exception ex) {
+               }catch(cv::Exception ex){
+               }catch(HalconCpp::HException ex){}
+
                QDateTime time = QDateTime::currentDateTime();
-               QString ImageFile = PROJECTNAME + "/" + time.toString("yyyy-MM-dd-HH-mm-ss-zzz-") + QString::number(hv_i[0].I()) + ".jpg";
+               QString ImageFile = PROJECTNAME + "/" + time.toString("yyyy-MM-dd-HH-mm-ss-zzz-") + QString::number(hv_i[0].I()) + QRes + ".jpg";
                HalconCpp::WriteImage(ho_ImageToCheck,"jpg",0,ImageFile.toLocal8Bit().data());
            }
            else if(WhichSet > -1){
                if(hv_i[0].I() == WhichSet)
                {
-                    if (HDevWindowStack::IsOpen())
-                        SetColor(HDevWindowStack::GetActive(),"blue");
+                   // if (HDevWindowStack::IsOpen())
+                        SetColor(DispHd,"blue");
                }
                else {
-                   if (HDevWindowStack::IsOpen())
-                     SetColor(HDevWindowStack::GetActive(),"green");
+                  // if (HDevWindowStack::IsOpen())
+                     SetColor(DispHd,"green");
                }
            }
 
 
-           if (HDevWindowStack::IsOpen())
-             DispObj(ho_ROI_Check, HDevWindowStack::GetActive());
+          // if (HDevWindowStack::IsOpen())
+             DispObj(ho_ROI_Check, DispHd);
          }
          // stop(...); only in hdevelop
        }//endtry
+
+         std::sort(ResultTmp.begin(),ResultTmp.end(),[](cv::Point2d a, cv::Point2d b){return a.x < b.x;});
+         for(auto R:ResultTmp){
+            Result.push_back(R.y);
+         }
+
     return Result;
     }catch (std::exception ex) {
         throw ex;

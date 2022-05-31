@@ -14,10 +14,10 @@ class FormRecognize : public QWidget
 
     TupleEx MValue;
 public:
-    explicit FormRecognize(QWidget *parent = nullptr,TupleEx tupleEx= TupleEx());
+    explicit FormRecognize(QWidget *parent = nullptr,TupleEx tupleEx = TupleEx(0,0));
     ~FormRecognize();
 
-    void DrawRectangle2Ex(int Idx = 0);
+    void DrawRectangle2Ex(int Idx = 0, int ImageIdx = 2);
 private slots:
     void on_pushButton_ReadImage_clicked();
 
@@ -36,6 +36,10 @@ private slots:
     void on_pushButton_SaveSample_clicked();
 
     void on_pushButton_Train_clicked();
+
+    void on_pushButton_SaveImage_clicked();
+
+    void on_pushButton_TestOrg_clicked();
 
 private:
     Ui::FormRecognize *ui;

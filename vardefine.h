@@ -38,9 +38,10 @@
 struct TupleEx{
     private:
      int i = 0;
-     HalconCpp::HTuple DispHandle = 0;
+
     public:
-     TupleEx(int idx = 0, int64_t winHandle = 0){
+     HalconCpp::HTuple DispHandle = 0;
+     TupleEx(int idx =0 , HalconCpp::HTuple winHandle = 0 ){
         i = idx;
         DispHandle = winHandle;
      }
@@ -48,7 +49,15 @@ struct TupleEx{
     std::string Content;
     int I(){return i;}
     HalconCpp::HTuple &Handle(){
-        if(0 == DispHandle) throw std::exception("null disphandle");
+        try{
+        if(0 == DispHandle.Type()) throw std::exception("null disphandle");
+        }catch (std::exception ex){
+            throw std::exception("null disphandle");
+        }
+        catch(HalconCpp::HException ex)
+        {
+            throw std::exception("null disphandle");
+        }
         return DispHandle;
     }
 };

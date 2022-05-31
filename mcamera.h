@@ -16,10 +16,14 @@ struct image_data
     uchar * data = nullptr;
 };
 
-#define USE_SDK
+//#define USE_SDK
+
+
 
 class MCamera
 {
+
+
     MCamera(){
        // Init();
     }
@@ -33,18 +37,26 @@ public:
         (HANDLE)_beginthreadex(NULL, 0,InitCamera_, this, 0, NULL);
     }
 
+    size_t CameraNum();
+    int InitCamera(std::string &Info);
+    int CloseCamera();
     static unsigned int __stdcall InitCamera_(void *pLvoid)
     {
-        Sleep(500);
+   //     Sleep(500);
         try{
-            bool isOK = MCamera::GetIns()->InitCamera();
-            if(isOK)
+            std::string CamInfo = "\r\n";
+            int isOK = MCamera::GetIns()->InitCamera(CamInfo);
+            if(isOK >= 3)
             {
-                global::GetIns()->History.push_back("相机初始化成功！");
+                char InFo[256]= {0};
+                sprintf_s(InFo,"相机初始化成功! 个数为%d %s",isOK,CamInfo.c_str());
+                global::GetIns()->History.push_back(InFo);
             }
             else
             {
-                global::GetIns()->History.push_back("相机初始化失败！");
+                char InFo[256]= {0};
+                sprintf_s(InFo,"相机初始化失败! 个数为%d %s",isOK,CamInfo.c_str());
+                global::GetIns()->History.push_back(InFo);
             }
 
             }catch(HalconCpp::HException ex)
@@ -55,36 +67,8 @@ public:
 
     }
 
-    HTuple hv_AcqHandle;
-    bool InitCamera(){
-        using namespace HalconCpp;
-        try{
-
-#ifdef USE_SDK
-        int camnum = enum_cameras();
-        if(camnum < 1)
-            return false;
-        return true;
-#endif
-        printf_s("init start\n");
-        OpenFramegrabber("GigEVision2", 0, 0, 0, 0, 0, 0, "progressive", -1, "default",
-            -1, "false", "default", "default", 0, -1, &hv_AcqHandle);
-        printf_s("init camera success\n");
-
-        SetFramegrabberParam(hv_AcqHandle, "AcquisitionMode", "Continuous");
-        SetFramegrabberParam(hv_AcqHandle, "TriggerMode", "Off");
-        SetFramegrabberParam(hv_AcqHandle, "TriggerSource", "Software");
-
-        GrabImageStart(hv_AcqHandle, -1);
 
 
-        printf_s("init over\n");
-        return true;
-        }catch(HalconCpp::HException ex)
-        {
-            throw ex;
-        }
-    }
 
     static void split_color(int width, int height, int ch, uchar* src, uchar** dst)
         {
@@ -107,7 +91,9 @@ public:
 
     inline void bytes_to_mat(cv::Mat & mat, uchar * bytes, int w, int h, int ch)
     {
-        CV_Assert(NULL!=bytes && w >0 && h >0);
+
+        try{
+        CV_Assert(nullptr !=bytes && w >0 && h >0);
         cv::Mat m;
         if(ch == 3)
             m = cv::Mat(h, w, CV_8UC3, cv::Scalar(0, 0, 0));
@@ -115,6 +101,9 @@ public:
             m = cv::Mat(h, w, CV_8UC1, cv::Scalar(0));
         m.data = bytes;
         mat = m.clone();
+        }catch(cv::Exception ex){
+            throw std::exception(ex.what());
+        }
     }
 
     static  bool bytes_to_hobj(HalconCpp::HObject & hobj,uchar * bytes, int w, int h, int ch)
@@ -140,37 +129,13 @@ public:
         return true;
     }
 
-    void GrabImageA(cv::Mat &ho_Image, int WhichCam, int Delay =0, int Manuefactory = 0){
-        try{
-        image_data ImgInfo;
-        Snap(ImgInfo.w, ImgInfo.h, &ImgInfo.data, ImgInfo.ch, Manuefactory, WhichCam,Delay);
-        bytes_to_mat(ho_Image,ImgInfo.data,ImgInfo.w,ImgInfo.h,ImgInfo.ch);
-        }catch(std::out_of_range ex){
-            throw std::exception(ex.what());
-        }catch(cv::Exception ex){
-            throw std::exception(ex.what());
-        }
-    }
 
-    void GrabImageA(HalconCpp::HObject &ho_Image, HTuple MaxDelay = 2000){
-        try{
-            using namespace HalconCpp;
-#ifdef USE_SDK
-            image_data ImgInfo;
-            Snap(ImgInfo.w, ImgInfo.h, &ImgInfo.data, ImgInfo.ch, 0, 0,0);
-            bytes_to_hobj(ho_Image,ImgInfo.data,ImgInfo.w,ImgInfo.h,ImgInfo.ch);
-            printf_s("w %d ,h %d, ch %d\n",ImgInfo.w,ImgInfo.h,ImgInfo.ch);
-#else
-            static std::mutex mtx;
-            std::lock_guard<std::mutex> lck(mtx);
-        GrabImageAsync(&ho_Image,hv_AcqHandle,MaxDelay);
-#endif
+  //  void GrabImageA(HalconCpp::HObject &ho_Image, int WhichCam,int isFlip = 0,int Delay =0, int Manuefactory = 0){
 
-        }catch(HalconCpp::HException except)
-        {
-            throw except;
-        }
-    }
+    void GrabImageA3(cv::Mat &ho_Image, int WhichCam,int isFlip = 0,int Delay =0, int Manuefactory = 0);
+    void GrabImageA1(cv::Mat &ho_Image, int WhichCam,int isFlip = 0,int Delay =0, int Manuefactory = 0);
+    void GrabImageA2(cv::Mat &ho_Image, int WhichCam,int isFlip = 0,int Delay =0, int Manuefactory = 0);
+
 };
 
 #endif // MCAMERA_H

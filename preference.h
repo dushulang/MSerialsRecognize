@@ -11,6 +11,19 @@
 #define HOGRATIO        8
 #define HOGHEIGHT       256
 #define HOGWIDTH        32
+#define BLOCKH          64
+#define BLOCKW          8
+#define CELLH           8
+#define CELLW           8
+
+#ifdef BEST
+#define HOGHEIGHT       256
+#define HOGWIDTH        32
+#define BLOCKH          64
+#define BLOCKW          8
+#define CELLH           3
+#define CELLW           3
+#endif
 
 
 #define PROJECTNAME     Preference::GetIns()->sys->GetProjectNameByIndex(Preference::GetIns()->sys->Project_Sel).toLocal8Bit().trimmed()
@@ -20,7 +33,8 @@
 #define CHECKNUM        Preference::GetIns()->prj->SampleNum
 #define ROW             Preference::GetIns()->prj->Row
 #define COLUMN          Preference::GetIns()->prj->Column
-#define ANGLE           Preference::GetIns()->prj->Angle
+//#define ANGLE           Preference::GetIns()->prj->Angle
+#define RECTVBIAS       Preference::GetIns()->prj->Angle
 #define REANGLE         Preference::GetIns()->prj->Angle
 #define ABANGLE         Preference::GetIns()->prj->AbAngle
 #define LEN1            Preference::GetIns()->prj->Len1
@@ -35,12 +49,26 @@
 #define CORNERR         Preference::GetIns()->prj->CornerR
 #define LINESPOS        4
 #define INVERTPOINT     Preference::GetIns()->prj->InvertPoint
-
+#define FLIPIMAGE       Preference::GetIns()->prj->Flip
 
 #define ORIGINX         Preference::GetIns()->prj->OriginX
 #define ORIGINY         Preference::GetIns()->prj->OriginY
 #define CAMANGLE        Preference::GetIns()->prj->CamAngle
 #define READDERSEL      Preference::GetIns()->prj->Readdersel
+
+#define THRESHOLD       Preference::GetIns()->prj->threshold_var
+#define CHOPSTICKAREA   Preference::GetIns()->prj->chopstick_area
+#define MEANVAR         Preference::GetIns()->prj->mean_var
+#define IMAGEFACTOR     Preference::GetIns()->prj->factor
+#define ERSIONRADIUS    Preference::GetIns()->prj->erison_radius
+#define THRESHOLDBIAS   Preference::GetIns()->prj->threshold_bias
+
+#define DOUBLEFILTERD   Preference::GetIns()->prj->d
+#define DOUBLEFILTERSC  Preference::GetIns()->prj->sigmaColor
+#define DOUBLEFILTERSS  Preference::GetIns()->prj->sigmaSpace
+#define DOUBLEFILTERBS  Preference::GetIns()->prj->blockSize
+
+#define ISSAVEIMAGE     Preference::GetIns()->prj->InvertPoint
 
 #define PARA_SET	(1)
 #define PARA_PRJ	(1<<1)
@@ -144,7 +172,18 @@ public:
                 settings->setValue(str_prj + "ABANGLE" + QString::number(i), AbAngle[i]);
                 settings->setValue(str_prj + "LEN1" + QString::number(i), Len1[i]);
                 settings->setValue(str_prj + "LEN2" + QString::number(i), Len2[i]);
+                settings->setValue(str_prj + "FLIP" + QString::number(i), Flip[i]);
 
+                settings->setValue(str_prj + "THRESHOLD" + QString::number(i), threshold_var[i]);
+                settings->setValue(str_prj + "CHOPAREA" + QString::number(i), chopstick_area[i]);
+                settings->setValue(str_prj + "MEANVAR" + QString::number(i), mean_var[i]);
+                settings->setValue(str_prj + "FACTOR"  + QString::number(i), factor[i]);
+                settings->setValue(str_prj + "ERIRADIUS" + QString::number(i), erison_radius[i]);
+                settings->setValue(str_prj + "THRESHOLDBIAS" + QString::number(i), threshold_bias[i]);
+                settings->setValue(str_prj + "DBD" + QString::number(i), d[i]);
+                settings->setValue(str_prj + "DBSC" + QString::number(i), sigmaColor[i]);
+                settings->setValue(str_prj + "DBSS" + QString::number(i), sigmaSpace[i]);
+                settings->setValue(str_prj + "BLOCKSIZE" + QString::number(i), blockSize[i]);
             }
 
             for(int i = 0;i<4*MAX_VOL ;i++){
@@ -210,6 +249,21 @@ public:
                 AbAngle[i] = settings->value(str_prj + "ABANGLE" + QString::number(i),0.0).toDouble();
                 Len1[i] = settings->value(str_prj + "LEN1" + QString::number(i),8.0).toDouble();
                 Len2[i] = settings->value(str_prj + "LEN2" + QString::number(i),8.0).toDouble();
+                Flip[i] = settings->value(str_prj + "FLIP" + QString::number(i),0).toInt();
+
+
+                threshold_var[i] = settings->value(str_prj + "THRESHOLD" + QString::number(i),85.0).toDouble();
+                chopstick_area[i] = settings->value(str_prj + "CHOPAREA" + QString::number(i),50000.0).toDouble();
+                mean_var[i] = settings->value(str_prj + "MEANVAR" + QString::number(i),5.0).toDouble();
+                factor[i] = settings->value(str_prj + "FACTOR" + QString::number(i),0.7).toDouble();
+                erison_radius[i] = settings->value(str_prj + "ERIRADIUS" + QString::number(i),12.0).toDouble();
+                threshold_bias[i] = settings->value(str_prj + "THRESHOLDBIAS" + QString::number(i),-1.0).toDouble();
+
+                d[i] = settings->value(str_prj + "DBD" + QString::number(i),9).toDouble();
+                sigmaColor[i] = settings->value(str_prj + "DBSC" + QString::number(i),20).toDouble();
+                sigmaSpace[i] = settings->value(str_prj + "DBSS"  + QString::number(i),5).toDouble();
+                blockSize[i] = settings->value(str_prj + "BLOCKSIZE" + QString::number(i),75).toDouble();
+
             }
             for(int i = 0;i<4*MAX_VOL ;i++){
                 Offset[i] = settings->value(str_prj + "OFS" + QString::number(i),2.0).toDouble();
@@ -297,10 +351,11 @@ public:
     double Column[MAX_VOL] = {0,0,0,0,0,0,0,0};
     double Angle[MAX_VOL] = {0,0,0,0,0,0,0,0};
     double AbAngle[MAX_VOL] = {0,0,0,0,0,0,0,0};
-    double Len1[MAX_VOL] = {8,0,0,0,0,0,0,0};
-    double Len2[MAX_VOL] = {8,0,0,0,0,0,0,0};
+    double Len1[MAX_VOL] = {16,0,0,0,0,0,0,0};
+    double Len2[MAX_VOL] = {256,0,0,0,0,0,0,0};
     double Offset[4*MAX_VOL]= {0,0,0,0,0,0,0,0};
     double Offset1[4*MAX_VOL]= {0,0,0,0,0,0,0,0};
+    int Flip[MAX_VOL] = {1,1,0,0,0,0,0,0};
     double RatioX = -1.0;
     double RatioY = -1.0;
     double OriginX = 0.0;
@@ -312,6 +367,19 @@ public:
     //通过计算重定位点到定位点的距离来评估高度差
     double EstimateHighLow = 0.0;
     double CornerR = 0;
+
+    double threshold_var[MAX_VOL] = {85.0,85.0,0,0,0,0,0,0};
+    double chopstick_area[MAX_VOL] = {50000,50000,0,0,0,0,0,0};
+    double mean_var[MAX_VOL] = {5,5,0,0,0,0,0,0};
+    double factor[MAX_VOL] = {0.7,0.7,0,0,0,0,0,0};
+    double erison_radius[MAX_VOL] = {12,12,0,0,0,0,0,0};
+    double threshold_bias[MAX_VOL] = {-1,-1,0,0,0,0,0,0};
+    double d[MAX_VOL] = {9,9,0,0,0,0,0,0};
+    double sigmaColor[MAX_VOL] = {20,20,0,0,0,0,0,0};
+    double sigmaSpace[MAX_VOL] = {5,5,0,0,0,0,0,0};
+    double blockSize[MAX_VOL] = {75,75,0,0,0,0,0,0};
+
+
 };
 
 /*

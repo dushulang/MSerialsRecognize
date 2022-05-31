@@ -16,7 +16,7 @@
 #include <QMessageBox>
 #include <list>
 
-
+//#define TEST
 
 class global{
 private:
@@ -24,14 +24,13 @@ private:
     global(){MachieState = 0;
         vecImages = std::vector<cv::Mat>(3);
     }
-
 public:
     std::vector<cv::Mat> vecImages;
     std::list<std::string> History;
     static global *GetIns(){static global g; return &g;}
     std::function<void(std::string)> UpdateHistory;
     HalconCpp::HTuple MainwindowDisp,SetDisp,Cam1Disp,Cam2Disp,Cam3Disp;
-
+    bool isGoingToExit = false;
 };
 
 

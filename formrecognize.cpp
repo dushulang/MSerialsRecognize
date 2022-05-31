@@ -8,13 +8,16 @@
 #include "QMessageBox.h"
 #include <QDesktopServices>
 #include <QUrl>
+#include <iostream>
+#include <fstream>
+
 
 using namespace HalconCpp;
 
 
-void FormRecognize::DrawRectangle2Ex(int Idx)
+void FormRecognize::DrawRectangle2Ex(int Idx,int ImageIdx)
 {
-    size_t imageIdx = 2;
+    size_t imageIdx = ImageIdx;
     HObject HObj;
     try{
         MSerials::Mat2Hobj(global::GetIns()->vecImages.at(imageIdx),HObj);
@@ -29,18 +32,19 @@ void FormRecognize::DrawRectangle2Ex(int Idx)
         GetImageSize(HObj,&hv_Width,&hv_Height);
         MSerials::h_disp_obj(HObj,hv_winHandle);
         if(0 != Idx){
-            if (HDevWindowStack::IsOpen())
-              SetDraw(HDevWindowStack::GetActive(),"margin");
-            if (HDevWindowStack::IsOpen())
-              SetColor(HDevWindowStack::GetActive(),"yellow");
-            SetTposition(HDevWindowStack::GetActive(), 0, 1);
-            WriteString(HDevWindowStack::GetActive(), "点击右键或者长按触摸屏幕等待十字消失确认");
-            DrawRectangle2(HDevWindowStack::GetActive(), &hv_RowIn, &hv_ColumnIn, &hv_AngleIn, &hv_Len1In,
+
+              SetDraw(hv_winHandle,"margin");
+
+              SetColor(hv_winHandle,"yellow");
+            SetTposition(hv_winHandle, 0, 1);
+            WriteString(hv_winHandle, "点击右键或者长按触摸屏幕等待十字消失确认");
+            DrawRectangle2(hv_winHandle, &hv_RowIn, &hv_ColumnIn, &hv_AngleIn, &hv_Len1In,
             &hv_Len2In);
         //模拟存储参数
-        MSerials::FindTrackLine(HObj, hv_RowIn, hv_ColumnIn, hv_AngleIn, hv_Len1In, hv_Len2In,
+
+        MSerials::FindTrackLine(HObj,hv_winHandle, hv_RowIn, hv_ColumnIn, hv_AngleIn, hv_Len1In, hv_Len2In,
             hv_Num, hv_Width, hv_Height, &hv_OrgX, &hv_OrgY, &hv_OrgPhi);
-        DispArrow(HDevWindowStack::GetActive(), hv_OrgY, hv_OrgX, hv_OrgY-(120*(hv_OrgPhi.TupleSin())),
+        DispArrow(hv_winHandle, hv_OrgY, hv_OrgX, hv_OrgY-(120*(hv_OrgPhi.TupleSin())),
             hv_OrgX+(120*(hv_OrgPhi.TupleCos())), 2);
 
         if (0 != (hv_OrgPhi<0))
@@ -149,6 +153,21 @@ FormRecognize::FormRecognize(QWidget *parent, TupleEx tupleEx) :
         SAVEPRJPARA;
     });
 
+    ui->lineEdit_VertcalBias1->setText(QString::number(RECTVBIAS[1]));
+    connect(ui->lineEdit_VertcalBias1,&QLineEdit::textChanged,[=](){
+        RECTVBIAS[1]= ui->lineEdit_VertcalBias1->text().toDouble();
+        SAVEPRJPARA;
+    });
+
+
+    ui->lineEdit_VertcalBias2->setText(QString::number(RECTVBIAS[2]));
+    connect(ui->lineEdit_VertcalBias2,&QLineEdit::textChanged,[=](){
+        RECTVBIAS[2]= ui->lineEdit_VertcalBias2->text().toDouble();
+        SAVEPRJPARA;
+    });
+
+
+
     connect(ui->tableWidget,&QTableWidget::itemChanged,[=](QTableWidgetItem * item){
         double v = item->text().toDouble();
         int c = item->column();
@@ -165,7 +184,7 @@ FormRecognize::FormRecognize(QWidget *parent, TupleEx tupleEx) :
             for(int i = 0; i<CHECKNUM;i++){
                 Bias.push_back(LINEOFFSET[i]);
             }
-            MSerials::CheckLogo(&global::GetIns()->vecImages.at(2),ROW[Idx],COLUMN[Idx],ABANGLE[Idx],LEN1[Idx],LEN2[Idx],Bias,LEN1[0],LEN2[0],r);
+            MSerials::CheckLogo(global::GetIns()->Cam3Disp,&global::GetIns()->vecImages.at(2),ROW[Idx],COLUMN[Idx],ABANGLE[Idx],LEN1[Idx],LEN2[Idx],Bias,LEN1[0],LEN2[0],r);
             }
             catch (std::exception ex) {
                     SetTposition(MValue.Handle(), 0, 1);
@@ -195,7 +214,7 @@ FormRecognize::FormRecognize(QWidget *parent, TupleEx tupleEx) :
             for(int i = 0; i<CHECKNUM;i++){
                 Bias.push_back(LINEOFFSET1[i]);
             }
-            MSerials::CheckLogo(&global::GetIns()->vecImages.at(2),ROW[Idx],COLUMN[Idx],ABANGLE[Idx],LEN1[Idx],LEN2[Idx],Bias,LEN1[0],LEN2[0],r);
+            MSerials::CheckLogo(global::GetIns()->Cam3Disp,&global::GetIns()->vecImages.at(2),ROW[Idx],COLUMN[Idx],ABANGLE[Idx],LEN1[Idx],LEN2[Idx],Bias,LEN1[0],LEN2[0],r);
             }
             catch (std::exception ex) {
                     SetTposition(MValue.Handle(), 0, 1);
@@ -268,7 +287,11 @@ void FormRecognize::on_pushButton_GrabImage_clicked()
     try {
         cv::Mat G;
         HalconCpp::HObject HObj;
-        MCamera::GetIns()->GrabImageA(G,Idx,0);
+        bool isGrab = true;
+
+            MCamera::GetIns()->GrabImageA3(G,Idx,0);
+
+        global::GetIns()->vecImages.at(Idx) = G.clone();
         MSerials::Mat2Hobj(G,HObj);
         MSerials::h_disp_obj(HObj,MValue.Handle());
     } catch (std::exception ex) {
@@ -278,31 +301,100 @@ void FormRecognize::on_pushButton_GrabImage_clicked()
         SetTposition(MValue.Handle(), 0, 1);
         WriteString(MValue.Handle(), ex.what());
     }
+    catch(cv::Exception ex){
+        SetTposition(MValue.Handle(), 0, 1);
+        WriteString(MValue.Handle(), ex.what());
+
+    }
+    catch(HalconCpp::HException ex){
+
+    }
 }
 
 void FormRecognize::on_pushButton_TestImage_clicked()
 {
     try {
+        std::string DataToPLC,ForShow;
         HalconCpp::HObject ho_Image;
         MSerials::Mat2Hobj(global::GetIns()->vecImages.at(2),ho_Image);
         if (HDevWindowStack::IsOpen())
-          MSerials::h_disp_obj(ho_Image, HDevWindowStack::GetActive());
+          MSerials::h_disp_obj(ho_Image, global::GetIns()->Cam3Disp);
         int Idx = 1;
         std::vector<double> Bias;
         for(int i = 0; i<CHECKNUM;i++){
             Bias.push_back(LINEOFFSET[i]);
         }
-        std::vector <double> res = MSerials::CheckLogo(&global::GetIns()->vecImages.at(2),ROW[Idx],COLUMN[Idx],ABANGLE[Idx],LEN1[Idx],LEN2[Idx],Bias,LEN1[0],LEN2[0]);
+        std::vector <double> res = MSerials::CheckLogo(global::GetIns()->Cam3Disp,&global::GetIns()->vecImages.at(2),ROW[Idx],COLUMN[Idx],ABANGLE[Idx],LEN1[Idx],LEN2[Idx],Bias,LEN1[0],LEN2[0],RECTVBIAS[Idx]);
+  //      if(abs(ABANGLE[Idx])>(3.1415926535/2)){
+   //         for(int index = res.size()-1; index >=0; index--){
+   //             if(res.at(index)>0){
+   //                 DataToPLC += "0001";
+  //                  ForShow+="1";
+    //            }
+   //             else {
+    //                DataToPLC += "0000";
+    //                ForShow+="0";
+     //           }
+    //        }
+    //    }else {
+            for(auto v : res){
+                if(v > 0){
+                    DataToPLC += "0001";
+                    ForShow+="1";
+                }
+                else {
+                    DataToPLC += "0000";
+                    ForShow+="0";
+                }
+            }
+    //    }
+
+    ForShow+="  ";
+
         Idx = 2;
         Bias.clear();
         for(int i = 0; i<CHECKNUM;i++){
              Bias.push_back(LINEOFFSET1[i]);
         }
-        std::vector <double> res1 = MSerials::CheckLogo(&global::GetIns()->vecImages.at(2),ROW[Idx],COLUMN[Idx],ABANGLE[Idx],LEN1[Idx],LEN2[Idx],Bias,LEN1[0],LEN2[0]);
-        for(auto r : res){if(r > 0) std::cout << " OK" ; else std::cout << " NG";}
-        std::cout << " " << std::endl;
-        for(auto r : res1){if(r > 0) std::cout << " OK" ; else std::cout << " NG";}
-        std::cout << " " << std::endl;
+        std::vector <double> res1 = MSerials::CheckLogo(global::GetIns()->Cam3Disp,&global::GetIns()->vecImages.at(2),ROW[Idx],COLUMN[Idx],ABANGLE[Idx],LEN1[Idx],LEN2[Idx],Bias,LEN1[0],LEN2[0],RECTVBIAS[Idx]);
+    //    if(abs(ABANGLE[Idx])>(3.1415926535/2)){
+    //        for(int index = res1.size()-1; index >=0; index--){
+    //            if(res1.at(index)>0){
+    //                DataToPLC += "0001";
+   //                 ForShow+="1";
+    //            }
+   //             else {
+   //                 DataToPLC += "0000";
+   //                 ForShow+="0";
+  //              }
+    //        }
+     //   }else {
+            for(auto v : res1){
+                if(v > 0){
+                    DataToPLC += "0001";
+                    ForShow+="1";
+                }
+                else {
+                    DataToPLC += "0000";
+                    ForShow+="0";
+                }
+            }
+       // }
+
+        int Value = 0;
+        for(auto v : res){ if(v>0) Value++;}
+        for(auto v : res1){ if(v>0) Value++;}
+
+        if(CHECKNUM == Value){
+        SetColor(MValue.Handle(),"green");
+        }else {
+        SetColor(MValue.Handle(),"red");
+        }
+        SetColor(MValue.Handle(),"cyan");
+        SetTposition(MValue.Handle(), 0, 1);
+        char ppp[256] ={0};
+        sprintf_s(ppp,"正面花纹数量%d  A1:%f A2:%f 结果%s\n",Value,ABANGLE[1],ABANGLE[2],ForShow.c_str());
+        WriteString(MValue.Handle(), ppp);
 
     } catch (std::exception ex) {
         SetTposition(MValue.Handle(), 0, 1);
@@ -353,13 +445,13 @@ void FormRecognize::on_pushButton_SaveSample_clicked()
         for(int i = 0; i<CHECKNUM;i++){
             Bias.push_back(LINEOFFSET[i]);
         }
-        MSerials::CheckLogo(&global::GetIns()->vecImages.at(2),ROW[Idx],COLUMN[Idx],ABANGLE[Idx],LEN1[Idx],LEN2[Idx],Bias,LEN1[0],LEN2[0],-2);
+        MSerials::CheckLogo(global::GetIns()->Cam3Disp,&global::GetIns()->vecImages.at(2),ROW[Idx],COLUMN[Idx],ABANGLE[Idx],LEN1[Idx],LEN2[Idx],Bias,LEN1[0],LEN2[0],RECTVBIAS[Idx],-2);
         Idx = 2;
         Bias.clear();
         for(int i = 0; i<CHECKNUM;i++){
              Bias.push_back(LINEOFFSET1[i]);
         }
-        MSerials::CheckLogo(&global::GetIns()->vecImages.at(2),ROW[Idx],COLUMN[Idx],ABANGLE[Idx],LEN1[Idx],LEN2[Idx],Bias,LEN1[0],LEN2[0],-2);
+        MSerials::CheckLogo(global::GetIns()->Cam3Disp,&global::GetIns()->vecImages.at(2),ROW[Idx],COLUMN[Idx],ABANGLE[Idx],LEN1[Idx],LEN2[Idx],Bias,LEN1[0],LEN2[0],RECTVBIAS[Idx],-2);
     } catch (std::exception ex) {
         SetTposition(MValue.Handle(), 0, 1);
         WriteString(MValue.Handle(), ex.what());
@@ -410,12 +502,151 @@ void FormRecognize::on_pushButton_Train_clicked()
         //std::cout << FileInfo.fileName().toLocal8Bit().data()<<std::endl;
     }
     }
+
+    char msg[256] = {0};
+    sprintf_s(msg,"正例图片%d张 反例图片%d张",pos.size(),neg.size());
+    SetColor(MValue.Handle(),"yellow");
+    SetTposition(MValue.Handle(), 20, 1);
+    WriteString(MValue.Handle(), msg);
+
     MSerials::cv_train_inv(pos,neg,cv::Rect(0,0,200,200),QString(PROJECTNAME).toLocal8Bit().data(),false);
     MSerials::load_train_data(QString(PROJECTNAME).toLocal8Bit().data());
 
     SetColor(MValue.Handle(),"green");
     SetTposition(MValue.Handle(), 0, 1);
     WriteString(MValue.Handle(), "训练完毕");
+    return;
+
+    }catch(cv::Exception ex){
+        SetColor(MValue.Handle(),"red");
+        SetTposition(MValue.Handle(), 20, 1);
+        WriteString(MValue.Handle(), ex.what());
+        std::cout << ex.what() <<std::endl;
+
+    }catch(std::exception ex){
+        SetColor(MValue.Handle(),"red");
+        SetTposition(MValue.Handle(), 20, 1);
+        WriteString(MValue.Handle(), ex.what());
+        std::cout << ex.what() <<std::endl;
+    }
+
+    SetColor(MValue.Handle(),"red");
+    SetTposition(MValue.Handle(), 0, 1);
+    WriteString(MValue.Handle(), "训练失败");
+}
+
+void FormRecognize::on_pushButton_SaveImage_clicked()
+{
+    try {
+        size_t Idx = 2;
+        HalconCpp::HObject ho_Image;
+        MSerials::Mat2Hobj(global::GetIns()->vecImages.at(Idx),ho_Image);
+        QDateTime time = QDateTime::currentDateTime();
+        QString ImageFile = PROJECTNAME + "/" + time.toString("yyyy-MM-dd-HH-mm-ss-zzz-") + "Cam3" + ".jpg";
+        HalconCpp::WriteImage(ho_Image,"jpg",0,ImageFile.toLocal8Bit().data());
+    }catch(cv::Exception ex){
+        SetTposition(MValue.Handle(), 0, 1);
+        WriteString(MValue.Handle(), ex.what());
+    } catch (std::exception ex) {
+        SetTposition(MValue.Handle(), 0, 1);
+        WriteString(MValue.Handle(), ex.what());
+    }catch(std::out_of_range ex){
+        SetTposition(MValue.Handle(), 0, 1);
+        WriteString(MValue.Handle(), ex.what());
+    }
+    catch(HalconCpp::HException except)
+        {
+               HTuple ExceptionMessage;
+               except.ToHTuple(&ExceptionMessage);
+               SetTposition(MValue.Handle(), 0, 1);
+               WriteString(MValue.Handle(), "保存图片失败");
+        }
+}
+
+void FormRecognize::on_pushButton_TestOrg_clicked()
+{
+
+
+
+    try{
+    QString Class = "/OK";
+    std::vector<std::string> pos,neg;
+    {
+    QDir dir(PROJECTNAME + Class);
+    dir.setFilter(QDir::Files | QDir::Hidden | QDir::NoSymLinks);
+    dir.setSorting(QDir::Size | QDir::Reversed);
+    QStringList filterList;filterList << "*.jpg" << "*.jpeg" << "*.bmp" << "*.png";   //设置筛选条件
+    QFileInfoList list = dir.entryInfoList(filterList);
+    for(auto &FileInfo :list){
+        pos.push_back((PROJECTNAME + Class + "/" + FileInfo.fileName()).toLocal8Bit().data());
+        //std::cout << FileInfo.fileName().toLocal8Bit().data()<<std::endl;
+    }
+    }
+
+    Class = "/NG";
+    {
+    QDir dir(PROJECTNAME + Class);
+    dir.setFilter(QDir::Files | QDir::Hidden | QDir::NoSymLinks);
+    dir.setSorting(QDir::Size | QDir::Reversed);
+    QStringList filterList;filterList << "*.jpg" << "*.jpeg" << "*.bmp" << "*.png";   //设置筛选条件
+    QFileInfoList list = dir.entryInfoList(filterList);
+    for(auto &FileInfo :list){
+        neg.push_back((PROJECTNAME + Class + "/" + FileInfo.fileName()).toLocal8Bit().data());
+    }
+    }
+
+    std::vector<std::string> Error;
+    std::string ErrorImage;
+
+    int ch = 0;
+    for(auto & Pos : pos){
+        cv::Mat ToCheck = cv::imread(Pos);
+        if(ToCheck.type() == CV_8UC1){
+            ch = 1;
+        }
+        else{
+            ch = 3;
+        }
+
+        if(ToCheck.empty()){
+            Error.push_back(Pos + "ERRORREAD");
+            continue;
+        }
+        float Res = MSerials::HogSvmPredict(ToCheck);
+        if(Res < 0.0){
+            Error.push_back(Pos);
+        }
+    }
+
+    for(auto & Pos : neg){
+        cv::Mat ToCheck = cv::imread(Pos);
+        if(ToCheck.type() == CV_8UC1){
+            ch = 1;
+        }
+        else{
+            ch = 3;
+        }
+        if(ToCheck.empty()){
+            Error.push_back(Pos + "ERRORREAD");
+            continue;
+        }
+        float Res = MSerials::HogSvmPredict(ToCheck);
+        if(Res > 0.0){
+            Error.push_back(Pos);
+        }
+    }
+
+
+    for(auto &s : Error){
+            ErrorImage += (s + "\r\n");
+    }
+
+    std::ofstream file1("error.txt");
+    file1<<ErrorImage;
+    file1.close();
+     QMessageBox::question(this, QString::fromLocal8Bit("警告"), QString::fromLocal8Bit(ErrorImage.c_str()), QMessageBox::Yes | QMessageBox::No);
+
+
     return;
 
     }catch(cv::Exception ex){

@@ -77,9 +77,9 @@
    <widget class="QLCDNumber" name="lcdNumber">
     <property name="geometry">
      <rect>
-      <x>602</x>
+      <x>0</x>
       <y>900</y>
-      <width>1051</width>
+      <width>611</width>
       <height>161</height>
      </rect>
     </property>
@@ -87,25 +87,12 @@
    <widget class="QWidget" name="widgetlLabel" native="true">
     <property name="geometry">
      <rect>
-      <x>0</x>
-      <y>900</y>
-      <width>611</width>
-      <height>171</height>
+      <x>600</x>
+      <y>780</y>
+      <width>1061</width>
+      <height>271</height>
      </rect>
     </property>
-    <widget class="QLabel" name="label">
-     <property name="geometry">
-      <rect>
-       <x>0</x>
-       <y>0</y>
-       <width>591</width>
-       <height>161</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>TextLabel</string>
-     </property>
-    </widget>
    </widget>
   </widget>
   <widget class="QMenuBar" name="menuBar">

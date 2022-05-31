@@ -25,15 +25,22 @@ DEFINES += QT_DEPRECATED_WARNINGS
 CONFIG += c++11
 
 SOURCES += \
+        caffe.cpp \
+        cryptdialog.cpp \
         formblackside.cpp \
         formrecognize.cpp \
+        halcontocv.cpp \
+        imagedeal.cpp \
         machine.cpp \
         main.cpp \
-        mainwindow.cpp
+        mainwindow.cpp \
+        mcamera.cpp
 
 HEADERS += \
         MSerialsCV.h \
         MSerialsCam.h \
+        caffe.h \
+        cryptdialog.h \
         excv.h \
         formblackside.h \
         formrecognize.h \
@@ -49,16 +56,19 @@ HEADERS += \
         vardefine.h
 
 FORMS += \
+        cryptdialog.ui \
         formblackside.ui \
         formrecognize.ui \
         mainwindow.ui
 
 INCLUDEPATH +=  ../third_party/opencv4.0.1/include \
                 ../third_party/opencv4.0.1/include/opencv2 \
-                ../third_party/halcon17/include \
-                ../third_party/halcon17/include/halconcpp
+                ../third_party/halcon18/include \
+                ../third_party/halcon18/include/halconcpp
 
-CONFIG += console
+#CONFIG += console
+
+#QMAKE_LFLAGS += /MANIFESTUAC:\"level=\'requireAdministrator\' uiAccess=\'false\'\"
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

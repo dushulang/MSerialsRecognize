@@ -5,7 +5,8 @@
 #include <QMessageBox>
 
 #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
-#include "../../third_party/crypt/include/md5.h"
+//#include "../../third_party/crypt/include/md5.h"
+#include "../third_party/crypt/include/md5.h"
 using namespace CryptoPP;
 #define REGEDITPATH	L"Software\\MicroSoftReg"
 #define ORIGINDATE	L"2019-1-1"
@@ -35,7 +36,7 @@ bool CryptDialog::Init(){
         size_t StrLen = strlen(Board.c_str());
         if (StrLen < 2)
         {
-            QMessageBox::information(NULL,"Tip",QString::fromStdString("验证信息无效，可能密钥不对或者没用管理员运行"));
+            QMessageBox::information(NULL,"Tip",QString::fromLocal8Bit("验证信息无效，可能密钥不对或者没用管理员运行"));
             exit(0);
         }
         CryptoPP::byte FirstCyrptAsBoard[36] = { 0 };	//因为要转成字符串，所以+2个作为结束符号的替补
