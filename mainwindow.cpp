@@ -25,7 +25,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->setupUi(this);
 
     //防止程序多开
-    HANDLE m_hMutex  =  ::CreateMutexW(NULL, FALSE,  L"PUNCH_____2019.6.8" );
+    HANDLE m_hMutex  =  ::CreateMutexW(NULL, FALSE,  L"PUNCH__2022.06.05" );
     //  检查错误代码
     if  (GetLastError()  ==  ERROR_ALREADY_EXISTS)  {
      QMessageBox::warning(this,QString::fromLocal8Bit("Error"),QString::fromLocal8Bit("请勿多开程序!如果频繁出现，请重启电脑"));
@@ -70,28 +70,6 @@ MainWindow::MainWindow(QWidget *parent) :
     HalconCpp::SetCheck("father");
     ui->tabWidget->insertTab(0,new FormBlackSide(0,TupleEx(0,global::GetIns()->Cam1Disp)),MSerials::Decode("相机1"));
 
-    nWndWidth = ui->widgetCam2->width();
-    nWndHeight= ui->widgetCam2->height();
-    HalconCpp::SetCheck("~father");
-    HalconCpp::OpenWindow(0, 0, nWndWidth, nWndHeight, (Hlong)ui->widgetCam2->winId(), "visible", "", &global::GetIns()->Cam2Disp);
-    HalconCpp::SetCheck("father");
-    ui->tabWidget->insertTab(1,new FormBlackSide(0,TupleEx(1,global::GetIns()->Cam2Disp)),MSerials::Decode("相机2"));
-
-    nWndWidth = ui->widgetCam3->width();
-    nWndHeight= ui->widgetCam3->height();
-    HalconCpp::SetCheck("~father");
-    HalconCpp::OpenWindow(0, 0, nWndWidth, nWndHeight, (Hlong)ui->widgetCam3->winId(), "visible", "", &global::GetIns()->Cam3Disp);
-    HalconCpp::SetCheck("father");
-    ui->tabWidget->insertTab(2,new FormRecognize(0,TupleEx(2,global::GetIns()->Cam3Disp)),MSerials::Decode("相机3"));
-
-
-
-
-
-
-
-
-
 
     QLCDNumber *液晶时间显示 = ui->lcdNumber;// new QLCDNumber(ui->widget_LCD);
     液晶时间显示->setDigitCount(10);
@@ -120,7 +98,7 @@ MainWindow::MainWindow(QWidget *parent) :
         {
             static std::mutex mtx;
             std::lock_guard<std::mutex> lck(mtx);
-            while(global::GetIns()->History.size() > 20) global::GetIns()->History.pop_front();
+            while(global::GetIns()->History.size() > 50) global::GetIns()->History.pop_front();
         }
         OldInfoSize = InfoSize;
     });
@@ -132,9 +110,30 @@ MainWindow::MainWindow(QWidget *parent) :
     //ui->widget->setStyleSheet("QWidget{background:rgba(64,30,66);color:white}");
     //ui->label->setStyleSheet("QLabel{background:rgba(64,30,66);color:white;font-size:88px}");
     //ui->label->setText(MSerials::Decode("插片机检测"));
-    global::GetIns()->History.push_back("相机命名为1 2...否则打不开相机");
+    global::GetIns()->History.push_back("相机命名为1...否则打不开相机");
     MCamera::GetIns()->Init();
     Machine::GetIns()->name();
+
+
+
+#ifdef ONE_CAMERA
+    return;
+#endif
+    nWndWidth = ui->widgetCam2->width();
+    nWndHeight= ui->widgetCam2->height();
+    HalconCpp::SetCheck("~father");
+    HalconCpp::OpenWindow(0, 0, nWndWidth, nWndHeight, (Hlong)ui->widgetCam2->winId(), "visible", "", &global::GetIns()->Cam2Disp);
+    HalconCpp::SetCheck("father");
+    ui->tabWidget->insertTab(1,new FormBlackSide(0,TupleEx(1,global::GetIns()->Cam2Disp)),MSerials::Decode("相机2"));
+
+    nWndWidth = ui->widgetCam3->width();
+    nWndHeight= ui->widgetCam3->height();
+    HalconCpp::SetCheck("~father");
+    HalconCpp::OpenWindow(0, 0, nWndWidth, nWndHeight, (Hlong)ui->widgetCam3->winId(), "visible", "", &global::GetIns()->Cam3Disp);
+    HalconCpp::SetCheck("father");
+    ui->tabWidget->insertTab(2,new FormRecognize(0,TupleEx(2,global::GetIns()->Cam3Disp)),MSerials::Decode("相机3"));
+
+
 }
 
 void MainWindow::RefreshTable(std::vector<std::pair<int,int>> Data){

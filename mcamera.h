@@ -132,6 +132,8 @@ public:
 
   //  void GrabImageA(HalconCpp::HObject &ho_Image, int WhichCam,int isFlip = 0,int Delay =0, int Manuefactory = 0){
 
+    void GrabImageSDK(cv::Mat &ho_Image, int WhichCam,int isFlip = 0);
+
     void GrabImageA3(cv::Mat &ho_Image, int WhichCam,int isFlip = 0,int Delay =0, int Manuefactory = 0);
     void GrabImageA1(cv::Mat &ho_Image, int WhichCam,int isFlip = 0,int Delay =0, int Manuefactory = 0);
     void GrabImageA2(cv::Mat &ho_Image, int WhichCam,int isFlip = 0,int Delay =0, int Manuefactory = 0);

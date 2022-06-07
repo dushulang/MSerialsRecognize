@@ -8,6 +8,8 @@
 #include "DXGI.h"
 #include "HalconCpp.h"
 
+#define ONE_CAMERA
+
 #define STR_COM         Preference::GetIns()->prj->COM
 #define STR_BAUND       Preference::GetIns()->prj->BAUND
 #define STR_PARITY      Preference::GetIns()->prj->PARITY

@@ -17,10 +17,10 @@
    <widget class="QWidget" name="widgetCam1" native="true">
     <property name="geometry">
      <rect>
-      <x>0</x>
+      <x>10</x>
       <y>0</y>
-      <width>601</width>
-      <height>448</height>
+      <width>1101</width>
+      <height>891</height>
      </rect>
     </property>
    </widget>
@@ -29,8 +29,8 @@
      <rect>
       <x>602</x>
       <y>0</y>
-      <width>1051</width>
-      <height>784</height>
+      <width>1</width>
+      <height>1</height>
      </rect>
     </property>
    </widget>
@@ -39,18 +39,18 @@
      <rect>
       <x>0</x>
       <y>450</y>
-      <width>601</width>
-      <height>448</height>
+      <width>1</width>
+      <height>1</height>
      </rect>
     </property>
    </widget>
    <widget class="QTabWidget" name="tabWidget">
     <property name="geometry">
      <rect>
-      <x>1660</x>
-      <y>270</y>
-      <width>261</width>
-      <height>781</height>
+      <x>1540</x>
+      <y>10</y>
+      <width>371</width>
+      <height>861</height>
      </rect>
     </property>
     <widget class="QWidget" name="tab">
@@ -67,10 +67,10 @@
    <widget class="QTextEdit" name="textEdit_History">
     <property name="geometry">
      <rect>
-      <x>1660</x>
+      <x>1120</x>
       <y>0</y>
-      <width>261</width>
-      <height>271</height>
+      <width>421</width>
+      <height>871</height>
      </rect>
     </property>
    </widget>
@@ -87,10 +87,10 @@
    <widget class="QWidget" name="widgetlLabel" native="true">
     <property name="geometry">
      <rect>
-      <x>600</x>
-      <y>780</y>
-      <width>1061</width>
-      <height>271</height>
+      <x>620</x>
+      <y>900</y>
+      <width>1281</width>
+      <height>141</height>
      </rect>
     </property>
    </widget>
@@ -101,7 +101,7 @@
      <x>0</x>
      <y>0</y>
      <width>1920</width>
-     <height>22</height>
+     <height>25</height>
     </rect>
    </property>
   </widget>

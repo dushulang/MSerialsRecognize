@@ -13,6 +13,26 @@
 #include <MMSystem.h>
 #include "mserialssystem.h"
 
+class tagImageInfomation{
+public:
+
+
+    tagImageInfomation(int _idx = 0, clock_t _clk = clock()){
+        Idx = _idx;
+        clk = _clk;
+    }
+
+    tagImageInfomation(int _idx, clock_t _clk, float _angle){
+        Idx = _idx;
+        clk = _clk;
+        Angle = _angle;
+    }
+    int Idx = 0;
+    clock_t clk = 0;
+    float Angle = -1.0;
+    cv::Mat Image;
+};
+
 class Machine
 {
 private:
@@ -24,7 +44,10 @@ private:
 
 public:
     MEvent EvtCam1,EvtCam2,EvtCam12Deal,EvtCam3,EvtPLC;
-
+    std::list<tagImageInfomation> ListPreImageInfo,ListImageInfomation, ListResultInfo;
+    const int AnglesSize = 50;
+    std::vector<float>  Angles;
+    std::mutex  mtxPreImageInfo,mtxImageInfo,mtxResultInfo, mtxSendMsg;
 
 private:
     Machine();

@@ -24,6 +24,7 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 CONFIG += c++11
 
+
 SOURCES += \
         caffe.cpp \
         cryptdialog.cpp \
@@ -67,6 +68,7 @@ INCLUDEPATH +=  ../third_party/opencv4.0.1/include \
                 ../third_party/halcon18/include/halconcpp
 
 #CONFIG += console
+QT += network
 
 #QMAKE_LFLAGS += /MANIFESTUAC:\"level=\'requireAdministrator\' uiAccess=\'false\'\"
 

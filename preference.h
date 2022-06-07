@@ -164,6 +164,10 @@ public:
             settings->setValue(str_prj + "ACC", Acc);
             settings->setValue(str_prj + "SPD", Spd);
             settings->setValue(str_prj + "POS", Pos);
+
+            settings->setValue(str_prj + "IP",IP);
+            settings->setValue(str_prj + "PORT", Port);
+
             settings->setValue(str_prj + "SAMNUM", SampleNum);
             for(int i = 0;i<MAX_VOL ;i++){
                 settings->setValue(str_prj + "ROW" + QString::number(i), Row[i]);
@@ -240,6 +244,8 @@ public:
             Acc = settings->value(str_prj + "ACC","2000").toString();
             Spd = settings->value(str_prj + "SPD","2000").toString();
             Pos = settings->value(str_prj + "POS","2000").toString();
+            IP = settings->value(str_prj + "IP","192.168.0.1").toString();
+            Port = settings->value(str_prj + "PORT","502").toInt();
             SampleNum = settings->value(str_prj + "SAMNUM",12).toInt();
 
             for(int i = 0;i<MAX_VOL ;i++){
@@ -262,7 +268,7 @@ public:
                 d[i] = settings->value(str_prj + "DBD" + QString::number(i),9).toDouble();
                 sigmaColor[i] = settings->value(str_prj + "DBSC" + QString::number(i),20).toDouble();
                 sigmaSpace[i] = settings->value(str_prj + "DBSS"  + QString::number(i),5).toDouble();
-                blockSize[i] = settings->value(str_prj + "BLOCKSIZE" + QString::number(i),75).toDouble();
+                blockSize[i] = settings->value(str_prj + "BLOCKSIZE" + QString::number(i),25).toDouble();
 
             }
             for(int i = 0;i<4*MAX_VOL ;i++){
@@ -346,6 +352,8 @@ public:
     QString Acc = "2000";
     QString Spd = "2000";
     QString Pos = "0";
+    QString IP = "192.168.0.1";
+    int Port = 502;
     int SampleNum = 15;
     double Row[MAX_VOL] = {0,0,0,0,0,0,0,0};
     double Column[MAX_VOL] = {0,0,0,0,0,0,0,0};
