@@ -48,6 +48,7 @@ public:
     const int AnglesSize = 50;
     std::vector<float>  Angles;
     std::mutex  mtxPreImageInfo,mtxImageInfo,mtxResultInfo, mtxSendMsg;
+    short CurTriggerValue = 0;
 
 private:
     Machine();
@@ -55,6 +56,11 @@ private:
     void StartThread();
     void OnTimer();
     static void TimeEvent(UINT uTimerID, UINT uMsg, DWORD_PTR dwUser, DWORD_PTR dw1, DWORD_PTR dw2){
+        (void)uTimerID;
+        (void)uMsg;
+        (void)dwUser;
+        (void)(dw1);
+        (void)dw2;
         Machine::GetIns()->OnTimer();
     }
 public:

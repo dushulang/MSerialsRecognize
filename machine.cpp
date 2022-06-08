@@ -32,6 +32,8 @@ void ImageInOut(){
 
 }
 
+#define ERRORANGLE -720.0
+
 #define SND_LEN 80
 unsigned char SndMsg[80];
 int SnapCounter1 = 0, SnapCounter2 = 0;
@@ -137,9 +139,6 @@ unsigned int __stdcall PLC(void * lp){
     Machine *pMachine = (Machine*)lp;
     Q_UNUSED(pMachine);
     unsigned char *data = new unsigned char[1024];
-    std::cout << "start PLC \n" << pMachine->name() <<std::endl;
-    //初始化PLC参数等等
-    int Trigger1 = 0,Trigger2 = 0;
 
     //    bool isOK = false,OisOK = false;
 
@@ -198,13 +197,13 @@ unsigned int __stdcall PLC(void * lp){
                     如果电脑返回数据的话，可以查看D4000是否值为-2.0
             */
                 //                short avlue = (data[9] << 8) | data[10];
-                short CurTriggerValue = (data[9] << 8) | data[10];
-                if(CurTriggerValue != PreTriggerValue){
-                    PreTriggerValue = CurTriggerValue;
+                Machine::GetIns()->CurTriggerValue = (data[9] << 8) | data[10];
+                if(Machine::GetIns()->CurTriggerValue != PreTriggerValue){
+                    PreTriggerValue = Machine::GetIns()->CurTriggerValue;
                     //==0时候会返回数据，大于0时候会拍摄数据
-                    if((CurTriggerValue >= 0) && (CurTriggerValue<=20))
+                    if((Machine::GetIns()->CurTriggerValue >= 0) && (Machine::GetIns()->CurTriggerValue<=20))
                     {
-                        tagImageInfomation imgInfo(CurTriggerValue);
+                        tagImageInfomation imgInfo(Machine::GetIns()->CurTriggerValue);
                         std::lock_guard<std::mutex> lck(Machine::GetIns()->mtxPreImageInfo);
                         Machine::GetIns()->ListPreImageInfo.push_back(imgInfo);
                     }
@@ -540,7 +539,11 @@ unsigned int __stdcall Cam1Cap(void * lp){
                 //debug
                 //                global::GetIns()->History.push_back("开始拍照");
                 int SerialsIdx = Machine::GetIns()->ListPreImageInfo.front().Idx;
-
+                //注意这个顺序
+                {
+                    std::lock_guard<std::mutex> lck(Machine::GetIns()->mtxPreImageInfo);
+                    Machine::GetIns()->ListPreImageInfo.pop_front() ;
+                }
 
 
                 if(SerialsIdx > 0){
@@ -562,7 +565,11 @@ unsigned int __stdcall Cam1Cap(void * lp){
                         std::string Result = "结果：";
                         for(int i = 0; i < (SND_LEN/4);i++){
                             //特别注意这个顺序！！！！
-                            int AngleInt = *(int*)&Machine::GetIns()->Angles.at(i);
+                            float Value = Machine::GetIns()->Angles.at(i);
+                            if(Value<=ERRORANGLE){
+                                Value = 0.0;
+                            }
+                            int AngleInt = *(int*)&Value;
                             SndMsg[i*4+2] = (AngleInt >> 24)&0xFF;
                             SndMsg[i*4+3] = (AngleInt >> 16)&0xFF;
                             SndMsg[i*4+0] = (AngleInt >> 8)&0xFF;
@@ -572,21 +579,32 @@ unsigned int __stdcall Cam1Cap(void * lp){
                             if(i < 10){
                                 Result += msg;
                             }
-
                         }
                         global::GetIns()->History.push_back(Result);
+                        //D4000
                         ModbusPresetMultipleRegisters(1,0xFA0,SND_LEN,SndMsg,GetHostByIndex(0));
+
+                        for(int i = 0; i < (SND_LEN/4);i++){
+                            //特别注意这个顺序！！！！
+                            float Value = Machine::GetIns()->Angles.at(i);
+                            if(Value<=ERRORANGLE){
+                                SndMsg[i*2+0] = 0;
+                                SndMsg[i*2+1] = 2;
+                            }else{
+                                SndMsg[i*2+0] = 0;
+                                SndMsg[i*2+1] = 1;
+                            }
+                        }
+                        //D420  = 0x1A4
+                        ModbusPresetMultipleRegisters(1,0x1A4,SND_LEN/2,SndMsg,GetHostByIndex(0));
                         for(auto & r:Machine::GetIns()->Angles){
-                            r = -1.0;
+                            r = ERRORANGLE-1.0;
                         }
                     }
 
                 }
 
-                {
-                    std::lock_guard<std::mutex> lck(Machine::GetIns()->mtxPreImageInfo);
-                    Machine::GetIns()->ListPreImageInfo.pop_front() ;
-                }
+
 
             }else{
                 Sleep(1);
@@ -642,12 +660,28 @@ unsigned int __stdcall Cam12Deal(void * lp){
     auto DispHand = global::GetIns()->Cam1Disp;
     int Idx = 0;
     for(;;){
+        bool hasInfo =false;
+        int SerialsIdx = 0;
         try {
 
             if(!Machine::GetIns()->ListImageInfomation.empty()){
+                hasInfo =true;
                 float Angle = -1.0;
-                auto & Image = Machine::GetIns()->ListImageInfomation.front().Image;
-                auto  SerialsIdx = Machine::GetIns()->ListImageInfomation.front().Idx-1;
+                cv::Mat  Image = Machine::GetIns()->ListImageInfomation.front().Image.clone();
+                SerialsIdx = Machine::GetIns()->ListImageInfomation.front().Idx-1;
+
+                //注意这个顺序！
+                {
+                    std::lock_guard<std::mutex> lck(Machine::GetIns()->mtxImageInfo);
+                    Machine::GetIns()->ListImageInfomation.pop_front();
+                }
+
+                if(ISSAVEIMAGE){
+                    QDateTime time = QDateTime::currentDateTime();
+                    QString ImageFile = PROJECTNAME + "/" + time.toString("yyyy-MM-dd-HH-mm-ss-zzz-") + "Cam1" + ".jpg";
+                    cv::imwrite(ImageFile.toLocal8Bit().data(),Image);
+                }
+
                 int res = MSerials::CheckUpSideOld(Image, global::GetIns()->Cam1Disp,THRESHOLD[Idx], CHOPSTICKAREA[Idx] ,
                                                    0.6,
                                                    DOUBLEFILTERD[Idx],
@@ -663,19 +697,19 @@ unsigned int __stdcall Cam12Deal(void * lp){
                 switch (res) {
                 case UP:
                     WriteString(DispHand, "上");
-                    Angle = 180.0;
+                    Angle = 0.0;
                     break;
                 case LEFT:
                     WriteString(DispHand, "左");
-                    Angle = 90.0;
+                    Angle = -90.0;
                     break;
                 case DOWN:
                     WriteString(DispHand, "下");
-                    Angle = 0.0;
+                    Angle = 180.0;
                     break;
                 case RIGHT:
                     WriteString(DispHand, "右");
-                    Angle = 270.0;
+                    Angle = 90.0;
                     break;
                 default:
                     break;
@@ -685,10 +719,7 @@ unsigned int __stdcall Cam12Deal(void * lp){
                 }else{
                     global::GetIns()->History.push_back("获取序列异常！");
                 }
-                {
-                    std::lock_guard<std::mutex> lck(Machine::GetIns()->mtxImageInfo);
-                    Machine::GetIns()->ListImageInfomation.pop_front();
-                }
+
 
             }else{
                 Sleep(1);
@@ -696,6 +727,13 @@ unsigned int __stdcall Cam12Deal(void * lp){
 
 
         } catch (std::exception &e) {
+            if(hasInfo){
+                if(SerialsIdx >= 0 && (SerialsIdx<Machine::GetIns()->AnglesSize)){
+                    Machine::GetIns()->Angles.at(SerialsIdx) = ERRORANGLE-1.0;
+                }else{
+                    global::GetIns()->History.push_back("获取序列异常！");
+                }
+            }
             global::GetIns()->History.push_back(e.what());
         }
 

@@ -101,6 +101,8 @@ MainWindow::MainWindow(QWidget *parent) :
             while(global::GetIns()->History.size() > 50) global::GetIns()->History.pop_front();
         }
         OldInfoSize = InfoSize;
+
+        ui->label_Cur->setText(QString::fromLocal8Bit("当前值：") + QString::number(Machine::GetIns()->CurTriggerValue));
     });
     timer_io->start();
 
