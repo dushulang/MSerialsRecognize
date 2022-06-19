@@ -4,6 +4,7 @@
 #include "global.h"
 #include "../PLC_DLL/PLC_DLL/plc_dll.h"
 #include "mcamera.h"
+#include <atomic>
 #include <QDir>
 //定义检测错误为0 上为1 左为2 下为3 右为4 触发定义地址D300和D301
 //定义检测结果是否有花纹 ，触发定义302
@@ -27,6 +28,9 @@ std::mutex mtx_Information;
 #define MESSAGE_OUT 1
 
 bool InitCamera = false;
+std::atomic<bool> isDealing(false);
+std::atomic<bool> isNeedBackData (false);
+int willReturnAddress = 0;
 
 void ImageInOut(){
 
@@ -195,21 +199,145 @@ unsigned int __stdcall PLC(void * lp){
                     当然，D406最大数据如果超过20，那么电脑不认这个数据，也不处理
                     建议plc在从0变为1以前，将数据清空为-2.0，表示数据没有接到返回，
                     如果电脑返回数据的话，可以查看D4000是否值为-2.0
+
+                    其中D420  = PLC 需要接收信号前清空为0，获取倒1表示正常 2表示异常
             */
                 //                short avlue = (data[9] << 8) | data[10];
                 Machine::GetIns()->CurTriggerValue = (data[9] << 8) | data[10];
                 if(Machine::GetIns()->CurTriggerValue != PreTriggerValue){
                     PreTriggerValue = Machine::GetIns()->CurTriggerValue;
                     //==0时候会返回数据，大于0时候会拍摄数据
-                    if((Machine::GetIns()->CurTriggerValue >= 0) && (Machine::GetIns()->CurTriggerValue<=20))
+                    if((Machine::GetIns()->CurTriggerValue > 0) && (Machine::GetIns()->CurTriggerValue<=20))
                     {
                         tagImageInfomation imgInfo(Machine::GetIns()->CurTriggerValue);
-                        std::lock_guard<std::mutex> lck(Machine::GetIns()->mtxPreImageInfo);
+                        //std::lock_guard<std::mutex> lck(Machine::GetIns()->mtxPreImageInfo);
                         Machine::GetIns()->ListPreImageInfo.push_back(imgInfo);
+                    }
+                    else if(0 == Machine::GetIns()->CurTriggerValue){
+                        isNeedBackData = true;
                     }
                 }
 
 
+
+                //
+                if(isNeedBackData){
+                    if( !Machine::GetIns()->EvtCam1.State() && Machine::GetIns()->ListPreImageInfo.empty() &&     Machine::GetIns()->ListImageInfomation.empty() && (false == isDealing))
+                    {
+                        isNeedBackData = false;
+
+                        #if 1
+                        int getAddr = willReturnAddress;
+                        if(getAddr < 0){
+                            getAddr = 0;
+                        }else if(getAddr > 40){
+                            getAddr = 40;
+                        }
+
+
+                        //写20个数据，一共20*4字节 80个数据
+                        std::string Result = "返回"+std::to_string(1+willReturnAddress)+"结果：";
+                        for(int i = 0; i < (SND_LEN/4);i++){
+                            //特别注意这个顺序！！！！
+                            float Value = Machine::GetIns()->Angles.at(i);
+                            if(Value<=ERRORANGLE){
+                                Value = 0.0;
+                            }
+                            int AngleInt = *(int*)&Value;
+                            SndMsg[i*4+2] = (AngleInt >> 24)&0xFF;
+                            SndMsg[i*4+3] = (AngleInt >> 16)&0xFF;
+                            SndMsg[i*4+0] = (AngleInt >> 8)&0xFF;
+                            SndMsg[i*4+1] = AngleInt&0xFF;
+                            char msg[256];
+                            sprintf_s(msg,"%4.1f ",Machine::GetIns()->Angles.at(i));
+                            if(i < 10){
+                                Result += msg;
+                            }
+                        }
+                        global::GetIns()->History.push_back(Result);
+                        //D4000
+                        unsigned short Addr = 2*getAddr + 0xFA0;
+                        ModbusPresetMultipleRegisters(1,Addr,4,SndMsg + 4*getAddr,GetHostByIndex(0));
+
+                        for(int i = 0; i < (SND_LEN/4);i++){
+                            //特别注意这个顺序！！！！
+                            float Value = Machine::GetIns()->Angles.at(i);
+                            if(Value<=ERRORANGLE){
+                                SndMsg[i*2+0] = 0;
+                                SndMsg[i*2+1] = 2;
+                            }else{
+                                SndMsg[i*2+0] = 0;
+                                SndMsg[i*2+1] = 1;
+                            }
+                        }
+
+                        Addr = getAddr + 0x1A4;
+                        //                 ModbusPresetMultipleRegisters(1,Addr,2,SndMsg + 2*Addr,GetHostByIndex(0));
+                        //D420  = 0x1A4 SND_LEN/2
+                        ModbusPresetMultipleRegisters(1,Addr,2,SndMsg + 2*getAddr,GetHostByIndex(0));
+
+#else
+
+
+                        //写20个数据，一共20*4字节 80个数据
+                        std::string Result = "返回结果：";
+                        for(int i = 0; i < (SND_LEN/4);i++){
+                            //特别注意这个顺序！！！！
+                            float Value = Machine::GetIns()->Angles.at(i);
+                            if(Value<=ERRORANGLE){
+                                Value = 0.0;
+                            }
+                            int AngleInt = *(int*)&Value;
+                            SndMsg[i*4+2] = (AngleInt >> 24)&0xFF;
+                            SndMsg[i*4+3] = (AngleInt >> 16)&0xFF;
+                            SndMsg[i*4+0] = (AngleInt >> 8)&0xFF;
+                            SndMsg[i*4+1] = AngleInt&0xFF;
+                            char msg[256];
+                            sprintf_s(msg,"%4.1f ",Machine::GetIns()->Angles.at(i));
+                            if(i < 10){
+                                Result += msg;
+                            }
+                        }
+                        global::GetIns()->History.push_back(Result);
+                        //D4000
+                        ModbusPresetMultipleRegisters(1,0xFA0,SND_LEN,SndMsg,GetHostByIndex(0));
+
+                        for(int i = 0; i < (SND_LEN/4);i++){
+                            //特别注意这个顺序！！！！
+                            float Value = Machine::GetIns()->Angles.at(i);
+                            if(Value<=ERRORANGLE){
+                                SndMsg[i*2+0] = 0;
+                                SndMsg[i*2+1] = 2;
+                            }else{
+                                SndMsg[i*2+0] = 0;
+                                SndMsg[i*2+1] = 1;
+                            }
+                        }
+
+
+                        //D420  = 0x1A4
+                        ModbusPresetMultipleRegisters(1,0x1A4,SND_LEN/2,SndMsg,GetHostByIndex(0));
+
+#endif
+
+
+                    }
+                }
+
+
+
+
+
+
+
+
+                if(!Machine::GetIns()->ListPreImageInfo.empty()){
+                    if(!Machine::GetIns()->EvtCam1.State()){
+                        Machine::GetIns()->CheckCamIdx = Machine::GetIns()->ListPreImageInfo.front().Idx;
+                        Machine::GetIns()->ListPreImageInfo.pop_front();
+                        Machine::GetIns()->EvtCam1.SetEvent();
+                    }
+                }
             }
 
 
@@ -505,12 +633,46 @@ unsigned int __stdcall PLC(void * lp){
 //检测青面抓图
 unsigned int __stdcall Cam1Cap(void * lp){
     Machine *pMachine = (Machine*)lp;
+    cv::Mat Image;
+    int Idx = 0;
     int iDx = 0;
     std::cout << "start1cap\n " << pMachine->name() <<std::endl;
     auto DispHand = global::GetIns()->Cam1Disp;
     global::GetIns()->isGoingToExit = true;
     //     global::GetIns()->History.push_back("开始拍照");
     // for(;!global::GetIns()->isGoingToExit;)
+    while (true) {
+        ::WaitForSingleObject(Machine::GetIns()->EvtCam1.get(),INFINITE);
+        if(MCamera::GetIns()->CameraNum() < 1) {
+            throw std::exception("未能找到相机");
+        }
+        int SerialsIdx = Machine::GetIns()->CheckCamIdx.load(std::memory_order_acquire);
+        try{
+            if(SerialsIdx > 0){
+                MCamera::GetIns()->GrabImageSDK(Image,Idx,FLIPIMAGE[Idx]);
+                {
+                    char msg[64];
+                    sprintf_s(msg,"拍照第%02d根筷子 ",SerialsIdx);
+                    global::GetIns()->History.push_back(msg);
+                    //加入检测队列
+                    tagImageInfomation imgInfo(SerialsIdx);
+                    imgInfo.Image = Image.clone();
+                    std::lock_guard<std::mutex> lck(Machine::GetIns()->mtxImageInfo);
+                    Machine::GetIns()->ListImageInfomation.push_back(imgInfo);
+                }
+            }else{
+                //通知返回数据,函数内部已经加锁，仅仅需要判断链接状态
+                isNeedBackData = true;
+            }
+
+        }catch(std::exception & e){
+            global::GetIns()->History.push_back(e.what());
+        }
+
+        Machine::GetIns()->EvtCam1.ResetEvent();
+    }
+
+
     while(true)
     {
 
@@ -526,13 +688,10 @@ unsigned int __stdcall Cam1Cap(void * lp){
 
 #else
         //根据获取的数据
-        if(MCamera::GetIns()->CameraNum() < 1) {
-            sleep(100);
-            continue;
-        }
+
         //        global::GetIns()->History.push_back("已经找到相机");
-        cv::Mat Image;
-        int Idx = 0;
+
+
 
         try {
             if(!Machine::GetIns()->ListPreImageInfo.empty()){
@@ -560,6 +719,9 @@ unsigned int __stdcall Cam1Cap(void * lp){
                     }
                 }else{
                     //通知返回数据,函数内部已经加锁，仅仅需要判断链接状态
+                    isNeedBackData = true;
+
+#if 0
                     if(isOK){
                         //写20个数据，一共20*4字节 80个数据
                         std::string Result = "结果：";
@@ -597,10 +759,11 @@ unsigned int __stdcall Cam1Cap(void * lp){
                         }
                         //D420  = 0x1A4
                         ModbusPresetMultipleRegisters(1,0x1A4,SND_LEN/2,SndMsg,GetHostByIndex(0));
-                        for(auto & r:Machine::GetIns()->Angles){
-                            r = ERRORANGLE-1.0;
-                        }
+                        //                        for(auto & r:Machine::GetIns()->Angles){
+                        //                            r = ERRORANGLE-1.0;
+                        //                        }
                     }
+#endif
 
                 }
 
@@ -664,14 +827,17 @@ unsigned int __stdcall Cam12Deal(void * lp){
         int SerialsIdx = 0;
         try {
 
+
             if(!Machine::GetIns()->ListImageInfomation.empty()){
                 hasInfo =true;
                 float Angle = -1.0;
                 cv::Mat  Image = Machine::GetIns()->ListImageInfomation.front().Image.clone();
                 SerialsIdx = Machine::GetIns()->ListImageInfomation.front().Idx-1;
-
+                willReturnAddress = SerialsIdx;
+                isDealing = true;
                 //注意这个顺序！
                 {
+
                     std::lock_guard<std::mutex> lck(Machine::GetIns()->mtxImageInfo);
                     Machine::GetIns()->ListImageInfomation.pop_front();
                 }
@@ -690,6 +856,8 @@ unsigned int __stdcall Cam12Deal(void * lp){
                                                    THRESHOLDBIAS[Idx],
                                                    DOUBLEFILTERBS[Idx],
                                                    &result);
+
+
 
                 SetColor(DispHand,"green");
                 SetTposition(DispHand, 0, 1);
@@ -712,6 +880,7 @@ unsigned int __stdcall Cam12Deal(void * lp){
                     Angle = 90.0;
                     break;
                 default:
+                    Angle = ERRORANGLE - 1.0;
                     break;
                 }
                 if(SerialsIdx >= 0 && (SerialsIdx<Machine::GetIns()->AnglesSize)){
@@ -720,13 +889,14 @@ unsigned int __stdcall Cam12Deal(void * lp){
                     global::GetIns()->History.push_back("获取序列异常！");
                 }
 
+                isDealing = false;
+
 
             }else{
                 Sleep(1);
             }
-
-
         } catch (std::exception &e) {
+            isDealing = false;
             if(hasInfo){
                 if(SerialsIdx >= 0 && (SerialsIdx<Machine::GetIns()->AnglesSize)){
                     Machine::GetIns()->Angles.at(SerialsIdx) = ERRORANGLE-1.0;
@@ -734,163 +904,57 @@ unsigned int __stdcall Cam12Deal(void * lp){
                     global::GetIns()->History.push_back("获取序列异常！");
                 }
             }
-            global::GetIns()->History.push_back(e.what());
+            ERRORLOG("检测异常");
+            //global::GetIns()->History.push_back(e.what());
         }
 
     }
 }
 
-//检测花纹
-unsigned int __stdcall Cam3(void * lp){
-    Machine *pMachine = (Machine*)lp;
-    std::cout << "start3deal\n " << pMachine->name() <<std::endl;
-    for(;;){
-        ::WaitForSingleObject(Machine::GetIns()->EvtCam3.get(),INFINITE);
-        clock_t clk = clock();
-        bool isOK = false;
-        std::string DataToPLC,ForShow;
-        try{
-            HalconCpp::HObject ho_Image;
-            size_t CamIdx = 2;
-            MCamera::GetIns()->GrabImageA3(global::GetIns()->vecImages.at(CamIdx),CamIdx);
-            MSerials::Mat2Hobj(global::GetIns()->vecImages.at(CamIdx),ho_Image);
-            MSerials::h_disp_obj(ho_Image, global::GetIns()->Cam3Disp);
-            int Idx = 1;
-            std::vector<double> Bias;
-            for(int i = 0; i<CHECKNUM;i++){
-                Bias.push_back(LINEOFFSET[i]);
-            }
-            std::vector <double> res = MSerials::CheckLogo(global::GetIns()->Cam3Disp,&global::GetIns()->vecImages.at(CamIdx),ROW[Idx],COLUMN[Idx],ABANGLE[Idx],LEN1[Idx],LEN2[Idx],Bias,LEN1[0],LEN2[0],RECTVBIAS[Idx]);
-            //      if(abs(ABANGLE[Idx])>(3.1415926535/2)){
-            //          for(int index = res.size()-1; index >=0; index--){
-            //              if(res.at(index)>0){
-            //                 DataToPLC += "0001";
-            //                 ForShow+="1";
-            //             }
-            //             else {
-            //                  DataToPLC += "0000";
-            //                 ForShow+="0";
-            //              }
-            //         }
-            //      }else {
-            for(auto v : res){
-                if(v > 0){
-                    DataToPLC += "0001";
-                    ForShow+="1";
-                }
-                else {
-                    DataToPLC += "0002";
-                    ForShow+="0";
-                }
-            }
-            //       }
 
 
 
-            ForShow+="  ";
+void Machine::StartThread(){
 
 
-            Idx = 2;
-            Bias.clear();
-            for(int i = 0; i<CHECKNUM;i++){
-                Bias.push_back(LINEOFFSET1[i]);
-            }
-            std::vector <double> res1 = MSerials::CheckLogo(global::GetIns()->Cam3Disp,&global::GetIns()->vecImages.at(CamIdx),ROW[Idx],COLUMN[Idx],ABANGLE[Idx],LEN1[Idx],LEN2[Idx],Bias,LEN1[0],LEN2[0],RECTVBIAS[Idx]);
-            //       if(abs(ABANGLE[Idx])>(3.1415926535/2)){
-            //           for(int index = res1.size()-1; index >=0; index--){
-            //               if(res1.at(index)>0){
-            //                   DataToPLC += "0001";
-            //                    ForShow+="1";
-            //               }
-            //               else {
-            //                   DataToPLC += "0000";
-            //                  ForShow+="0";
-            //               }
-            //          }
-            //       }else {
-            for(auto v : res1){
-                if(v > 0){
-                    DataToPLC += "0001";
-                    ForShow+="1";
-                }
-                else {
-                    DataToPLC += "0002";
-                    ForShow+="0";
-                }
-            }
-            //       }
-            {
-
-                //协定相机3传回数据 从370开始1为识别正确，2为识别错误 0是没有识别一共有2*双筷子数据
-                tagListPLC Var = tagListPLC(370,DataToPLC.length()/4,DataToPLC,false);
-                MessageInOut(Var,IMAGE_IN);
-            }
-
-
-            //准备返回的数据
-            int Value = 0, i = 0;
-            char TMP[256] = {0};
-            for(auto v : res){ if(v>0) Value++;}
-            for(auto v : res1){ if(v>0) Value++;}
-            sprintf_s(TMP,"%04X",Value);
-            std::string toPLC(TMP);
-            SetColor(global::GetIns()->Cam3Disp,"cyan");
-            SetTposition(global::GetIns()->Cam3Disp, 0, 1);
-            char ppp[256] ={0};
-            sprintf_s(ppp,"正面花纹数量%d 计算时间为%d ms 结果%s\n",Value,clock()-clk,ForShow.c_str());
-            HalconCpp::WriteString(global::GetIns()->Cam3Disp, ppp);
-            {
-                //           std::lock_guard<std::mutex> lck(mtx_Information);
-                //           listMsg.push_back(tagListPLC(360,toPLC.length()/4,toPLC,false));
-
-                tagListPLC Var = tagListPLC(360,toPLC.length()/4,toPLC,false);
-                MessageInOut(Var,IMAGE_IN);
-
-            }
-            isOK = true;
-        }catch(HalconCpp::HException ex){
-
-            HTuple Error;
-            ex.ToHTuple((&Error));
-            SetTposition(global::GetIns()->Cam3Disp,10,10);
-            SetColor(global::GetIns()->Cam3Disp,"red");
-            WriteString(global::GetIns()->Cam3Disp,Error);
-
-        }catch(cv::Exception ex){
-
-            SetTposition(global::GetIns()->Cam3Disp,10,10);
-            SetColor(global::GetIns()->Cam3Disp,"red");
-            HalconCpp::WriteString(global::GetIns()->Cam3Disp,ex.what());
-        }
-        catch(std::exception ex){
-
-            SetTposition(global::GetIns()->Cam3Disp,10,10);
-            SetColor(global::GetIns()->Cam3Disp,"red");
-            HalconCpp::WriteString(global::GetIns()->Cam3Disp,ex.what());
-        }catch(std::out_of_range ex){
-
-            SetTposition(global::GetIns()->Cam3Disp,10,10);
-            SetColor(global::GetIns()->Cam3Disp,"red");
-            HalconCpp::WriteString(global::GetIns()->Cam3Disp,ex.what());
-        }
-        {
-            //         std::lock_guard<std::mutex> lck(mtx_Information);
-            //          if(!isOK)  listMsg.push_back(tagListPLC(360,1,"0000",false));
-            //          listMsg.push_back(tagListPLC(302,0x1,"0000",false));
-            //           listMsg.push_back(tagListPLC(305,0x1,"0001",false));
-
-            if(!isOK){
-                tagListPLC Var = tagListPLC(360,1,"0000",false);
-                MessageInOut(Var,IMAGE_IN);
-            }
-            tagListPLC Var = tagListPLC(302,0x1,"0000",false);
-            MessageInOut(Var,IMAGE_IN);
-            tagListPLC Var1 = tagListPLC(302,0x1,"0000",false);
-            MessageInOut(Var1,IMAGE_IN);
-        }
-        Machine::GetIns()->EvtCam3.ResetEvent();
+    for(auto & r:Angles){
+        r = ERRORANGLE-1.0;
     }
+
+    //0xC == 001100
+    EvtCam1.ResetEvent();
+    HANDLE Cam1 = (HANDLE)_beginthreadex(NULL, 0, Cam1Cap, this, 0, 0);
+    SetThreadAffinityMask(Cam1,0x8);
+    SetThreadPriority(Cam1, THREAD_PRIORITY_TIME_CRITICAL);
+
+    SetThreadAffinityMask((HANDLE)_beginthreadex(NULL, 0, Cam12Deal, this, 0, 0),0x2);
+
+    HANDLE PLCThread = (HANDLE)_beginthreadex(NULL, 0, PLC, this, 0, 0);
+    SetThreadAffinityMask(PLCThread ,0x1);
+    SetThreadPriority(PLCThread, THREAD_PRIORITY_TIME_CRITICAL);
+
+    //    gtime_ID = timeSetEvent(1, 1, (LPTIMECALLBACK)TimeEvent, 1, TIME_PERIODIC);
+    //    if (gtime_ID == NULL)
+    //    {
+    //        printf("定时器设定失败\n");
+    //        return;
+    //    }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if 0
+
 
 void Machine::OnTimer(){
 
@@ -905,24 +969,6 @@ void Machine::ImageIn1(cv::Mat &InputArray, int idx){
 
 }
 
+#endif
 
-void Machine::StartThread(){
-    //0xC == 001100
-    HANDLE Cam1 = (HANDLE)_beginthreadex(NULL, 0, Cam1Cap, this, 0, 0);
-    SetThreadAffinityMask(Cam1,0x8);
-    SetThreadPriority(Cam1, THREAD_PRIORITY_TIME_CRITICAL);
-
-    SetThreadAffinityMask((HANDLE)_beginthreadex(NULL, 0, Cam12Deal, this, 0, 0),0x2);
-
-    HANDLE PLCThread = (HANDLE)_beginthreadex(NULL, 0, PLC, this, 0, 0);
-    SetThreadAffinityMask(PLCThread ,0x1);
-    SetThreadPriority(PLCThread, THREAD_PRIORITY_TIME_CRITICAL);
-
-    gtime_ID = timeSetEvent(1, 1, (LPTIMECALLBACK)TimeEvent, 1, TIME_PERIODIC);
-    if (gtime_ID == NULL)
-    {
-        printf("定时器设定失败\n");
-        return;
-    }
-}
 

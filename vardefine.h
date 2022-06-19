@@ -10,6 +10,8 @@
 
 #define ONE_CAMERA
 
+#define ERRORLOG(x) {global::GetIns()->History.push_back(x);}
+
 #define STR_COM         Preference::GetIns()->prj->COM
 #define STR_BAUND       Preference::GetIns()->prj->BAUND
 #define STR_PARITY      Preference::GetIns()->prj->PARITY

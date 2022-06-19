@@ -70,7 +70,7 @@ INCLUDEPATH +=  ../third_party/opencv4.0.1/include \
 #CONFIG += console
 QT += network
 
-#QMAKE_LFLAGS += /MANIFESTUAC:\"level=\'requireAdministrator\' uiAccess=\'false\'\"
+QMAKE_LFLAGS += /MANIFESTUAC:\"level=\'requireAdministrator\' uiAccess=\'false\'\"
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
